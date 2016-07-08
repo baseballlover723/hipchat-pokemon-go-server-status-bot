@@ -158,12 +158,27 @@ module.exports = function (app, addon) {
             // console.log(req.body);
             var clientId = req.body.oauth_client_id;
             var room = req.body.item.room;
-            addon.settings.set(room.id, [], clientId);
+            // addon.settings.set(room.id, [], clientId);
             console.log(req.body.item.message.message);
             hipchat.sendMessage(req.clientInfo, req.identity.roomId, 'pong pong')
                 .then(function (data) {
                     res.sendStatus(200);
                 });
+        }
+    );
+
+    app.post('/help',
+        addon.authenticate(),
+        function (req, res) {
+            var clientId = req.body.oauth_client_id;
+            var room = req.body.item.room;
+            var user = req.body.item.message.from;
+            helpString = "<b>/server</b>: Checks the server status. It will send a message to the room with the status of the pokemon go server. It will ping people on the subscriber list if the status changes.<br>" +
+                "<b>/help</b>: shows you what the commands do<br/>" +
+                "<b>/subs</b>: Displays the ping names of people who will receive notification if the server status changes<br/>" +
+            "<b>/add</b>: adds yourself to the subscriber list<br/>" +
+            "<b>/remove</b>: removes yourself from the subscriber list<br/>";
+            sendMessage(req, helpString);
         }
     );
 
@@ -327,7 +342,7 @@ module.exports = function (app, addon) {
         hipchat.sendMessage(req.clientInfo, req.identity.roomId, message, ops);
     }
 
-    function checkServer(req, callback = function(status, text) {}) {
+    function checkServer(req, callback = function (status, text) {}) {
         url = 'http://cmmcd.com/PokemonGo/';
         request(url, function (error, response, text) {
             if (!error) {
@@ -352,7 +367,7 @@ module.exports = function (app, addon) {
 // https://developer.atlassian.com/hipchat/guide/installation-flow
     addon.on('installed', function (clientKey, clientInfo, req) {
         hipchat.sendMessage(clientInfo, req.body.roomId, 'The ' + addon.descriptor.name + ' add-on has been installed in this room').then(function (data) {
-            hipchat.sendMessage(clientInfo, req.body.roomId, "use '/server' to use me");
+            hipchat.sendMessage(clientInfo, req.body.roomId, "use /help to find out what I do");
         });
         checkServer({clientInfo: clientInfo}, function (status, text) {
             lastStatus = status;
@@ -361,6 +376,7 @@ module.exports = function (app, addon) {
 
 // Clean up clients when uninstalled
     addon.on('uninstalled', function (id) {
+        hipchat.sendMessage(clientInfo, req.body.roomId, 'The ' + addon.descriptor.name + ' add-on has been uninstalled in this room');
         addon.settings.client.keys(id + ':*', function (err, rep) {
             rep.forEach(function (k) {
                 addon.logger.info('Removing key:', k);
