@@ -3,8 +3,8 @@
   "name": "Pokemon Go Server Status Bot",
   "description": "My very first HipChat add-on",
   "vendor": {
-    "name": "Angry Nerds",
-    "url": "https://www.hipchat.com"
+    "name": "Philip Ross",
+    "url": "https://github.com/baseballlover723/"
   },
   "links": {
     "self": "{{localBaseUrl}}/atlassian-connect.json",
