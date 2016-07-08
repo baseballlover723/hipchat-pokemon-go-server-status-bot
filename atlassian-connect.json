@@ -37,6 +37,27 @@
         "authentication": "jwt"
       },
       {
+        "url": "{{localBaseUrl}}/add",
+        "pattern": "^/add",
+        "event": "room_message",
+        "name": "Hello!",
+        "authentication": "jwt"
+      },
+      {
+        "url": "{{localBaseUrl}}/remove",
+        "pattern": "^/remove",
+        "event": "room_message",
+        "name": "Hello!",
+        "authentication": "jwt"
+      },
+      {
+        "url": "{{localBaseUrl}}/subs",
+        "pattern": "^/subs",
+        "event": "room_message",
+        "name": "Hello!",
+        "authentication": "jwt"
+      },
+      {
         "url": "{{localBaseUrl}}/webhook",
         "pattern": "^/hello",
         "event": "room_message",

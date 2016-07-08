@@ -9,7 +9,7 @@ var cheerio = require('cheerio');
 
 var lastStatus;
 var interval;
-var REFRESH_RATE = 10 * 1000; // 10 seconds
+var REFRESH_RATE = 20 * 1000; // 20 seconds
 
 // This is the heart of your HipChat Connect add-on. For more information,
 // take a look at https://developer.atlassian.com/hipchat/tutorials/getting-started-with-atlassian-connect-express-node-js
@@ -156,6 +156,9 @@ module.exports = function (app, addon) {
         addon.authenticate(),
         function (req, res) {
             // console.log(req.body);
+            var clientId = req.body.oauth_client_id;
+            var room = req.body.item.room;
+            addon.settings.set(room.id, [], clientId);
             console.log(req.body.item.message.message);
             hipchat.sendMessage(req.clientInfo, req.identity.roomId, 'pong pong')
                 .then(function (data) {
@@ -168,9 +171,13 @@ module.exports = function (app, addon) {
         addon.authenticate(),
         function (req, res) {
             console.log(req.body.item.message.message);
+            var clientId = req.body.oauth_client_id;
+            var room = req.body.item.room;
 
             checkServer(req, function (status, text) {
-                sendMessage(req, text);
+                getMentionsString(room, clientId, function (pings) {
+                    sendMessage(req, text + pings, {options: {notify: true}});
+                });
                 if (!interval && status.includes("Offline") || status.includes("Unstable")) {
                     lastStatus = status;
                     interval = setInterval(function () {
@@ -203,17 +210,124 @@ module.exports = function (app, addon) {
         }
     );
 
-    function sendMessage(req, message, callback = false) {
-        hipchat.sendMessage(req.clientInfo, req.identity.roomId, message)
-            .then(function (data) {
-                if (callback) {
-                    callback(data);
+    app.post('/add',
+        addon.authenticate(),
+        function (req, res) {
+            var clientId = req.body.oauth_client_id;
+            var room = req.body.item.room;
+            var user = req.body.item.message.from;
+
+            addUser(room, user, clientId, function (added) {
+                if (added) {
+                    sendMessage(req, "added " + user.name + " to subscriber list");
+                } else {
+                    sendMessage(req, user.name + " is already subscribed");
                 }
             });
+        }
+    );
+
+    app.post('/remove',
+        addon.authenticate(),
+        function (req, res) {
+            var clientId = req.body.oauth_client_id;
+            var room = req.body.item.room;
+            var user = req.body.item.message.from;
+
+            removeUser(room, user, clientId, function (removed) {
+                if (removed) {
+                    sendMessage(req, user.name + " has unsubscribed :(");
+                } else {
+                    sendMessage(req, user.name + " wasn't subscribed");
+                }
+            });
+        }
+    );
+
+    app.post('/subs',
+        addon.authenticate(),
+        function (req, res) {
+            var clientId = req.body.oauth_client_id;
+            var room = req.body.item.room;
+
+            getMentions(room, clientId, function (names) {
+                if (names.length > 0) {
+                    var message = "current subs are (ping names): ";
+                    names.forEach(function (name) {
+                        message += " " + name;
+                    });
+                    sendMessage(req, message);
+                } else {
+                    sendMessage(req, "There are no subscribers :(");
+                }
+            });
+        }
+    );
+
+    function getMentionsString(room, clientId, callback) {
+        addon.settings.get(room.id, clientId).then(function (data) {
+            var mentionNames = "";
+            data.forEach(function (user) {
+                mentionNames += " @" + user.mention_name;
+            });
+
+            callback(mentionNames);
+        });
     }
 
-    // callback(status, text)
-    function checkServer(req, callback = false) {
+    function getMentions(room, clientId, callback) {
+        addon.settings.get(room.id, clientId).then(function (data) {
+            var mentionNames = [];
+            data.forEach(function (user) {
+                mentionNames.push(user.mention_name);
+            });
+
+            callback(mentionNames);
+        });
+    }
+
+    function addUser(room, user, clientId, callback = function () {}) {
+        addon.settings.get(room.id, clientId).then(function (data) {
+            data = data || [];
+            if (!includesUser(data, user)) {
+                data.push(user);
+                addon.settings.set(room.id, data, clientId);
+                callback(true);
+            } else {
+                callback(false)
+            }
+        });
+    }
+
+    function removeUser(room, user, clientId, callback = function () {}) {
+        addon.settings.get(room.id, clientId).then(function (data) {
+            data = data || [];
+            var index;
+            if (index = includesUser(data, user)) {
+                data.splice(index, 1);
+                addon.settings.set(room.id, data, clientId);
+                callback(user);
+            } else {
+                callback(false)
+            }
+        });
+    }
+
+    function includesUser(arr, user) {
+        for (var index in arr) {
+            var storedUser = arr[index];
+            if (storedUser.id == user.id) {
+                return index;
+            }
+        }
+        return false;
+    }
+
+    function sendMessage(req, message, ops = {}) {
+        hipchat.sendMessage(req.clientInfo, req.identity.roomId, message, ops);
+    }
+
+    function checkServer(req, callback = function(status, text) {}) {
         url = 'http://cmmcd.com/PokemonGo/';
         request(url, function (error, response, text) {
             if (!error) {
@@ -233,19 +347,19 @@ module.exports = function (app, addon) {
         });
     }
 
-    // Notify the room that the add-on was installed. To learn more about
-    // Connect's install flow, check out:
-    // https://developer.atlassian.com/hipchat/guide/installation-flow
+// Notify the room that the add-on was installed. To learn more about
+// Connect's install flow, check out:
+// https://developer.atlassian.com/hipchat/guide/installation-flow
     addon.on('installed', function (clientKey, clientInfo, req) {
-        hipchat.sendMessage(clientInfo, req.body.roomId, 'The ' + addon.descriptor.name + ' add-on has been installed in this room').then(function(data) {
-            hipchat.sendMessage(clientInfo, req.body.roomId, 'use "/server" to use me');
+        hipchat.sendMessage(clientInfo, req.body.roomId, 'The ' + addon.descriptor.name + ' add-on has been installed in this room').then(function (data) {
+            hipchat.sendMessage(clientInfo, req.body.roomId, "use '/server' to use me");
         });
         checkServer({clientInfo: clientInfo}, function (status, text) {
             lastStatus = status;
         });
     });
 
-    // Clean up clients when uninstalled
+// Clean up clients when uninstalled
     addon.on('uninstalled', function (id) {
         addon.settings.client.keys(id + ':*', function (err, rep) {
             rep.forEach(function (k) {
@@ -255,7 +369,8 @@ module.exports = function (app, addon) {
         });
     });
 
-};
+}
+;
 
 String.prototype.replaceAll = function (search, replacement) {
     var target = this;
