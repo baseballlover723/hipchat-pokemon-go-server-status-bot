@@ -91,7 +91,7 @@
     // that to be honored here.
     "port": "$PORT",
     // This is the public URL to your production add-on.
-    "localBaseUrl": "https://pokemon-go-sever-status-hc-bot.herokuapp.com/",
+    "localBaseUrl": "https://pokemongo-server-status-hc-bot.herokuapp.com/",
     "store": {
       // Let's use Redis as our default data store in prod
       "adapter": "redis",
