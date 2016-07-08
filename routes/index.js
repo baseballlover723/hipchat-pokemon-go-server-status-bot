@@ -69,12 +69,12 @@ module.exports = function (app, addon) {
             res.json({
                 "label": {
                     "type": "html",
-                    "value": "Hello World!"
+                    "value": "Server status here!"
                 },
                 "status": {
                     "type": "lozenge",
                     "value": {
-                        "label": "NEW",
+                        "label": "TODO",
                         "type": "error"
                     }
                 }
@@ -93,12 +93,12 @@ module.exports = function (app, addon) {
             res.json({
                 "label": {
                     "type": "html",
-                    "value": "Hello World!"
+                    "value": "Server status here!"
                 },
                 "status": {
                     "type": "lozenge",
                     "value": {
-                        "label": "All good",
+                        "label": "TODO",
                         "type": "success"
                     }
                 }
@@ -237,7 +237,9 @@ module.exports = function (app, addon) {
     // Connect's install flow, check out:
     // https://developer.atlassian.com/hipchat/guide/installation-flow
     addon.on('installed', function (clientKey, clientInfo, req) {
-        hipchat.sendMessage(clientInfo, req.body.roomId, 'The ' + addon.descriptor.name + ' add-on has been installed in this room');
+        hipchat.sendMessage(clientInfo, req.body.roomId, 'The ' + addon.descriptor.name + ' add-on has been installed in this room').then(function(data) {
+            hipchat.sendMessage(clientInfo, req.body.roomId, 'use "/server" to use me');
+        });
         checkServer({clientInfo: clientInfo}, function (status, text) {
             lastStatus = status;
         });
