@@ -281,6 +281,7 @@ module.exports = function (app, addon) {
 
     function getMentionsString(room, clientId, callback) {
         addon.settings.get(room.id, clientId).then(function (data) {
+            data = data || [];
             var mentionNames = "";
             data.forEach(function (user) {
                 mentionNames += " @" + user.mention_name;
@@ -292,6 +293,7 @@ module.exports = function (app, addon) {
 
     function getMentions(room, clientId, callback) {
         addon.settings.get(room.id, clientId).then(function (data) {
+            data = data || [];
             var mentionNames = [];
             data.forEach(function (user) {
                 mentionNames.push(user.mention_name);
