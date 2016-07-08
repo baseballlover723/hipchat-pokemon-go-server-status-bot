@@ -176,8 +176,8 @@ module.exports = function (app, addon) {
             helpString = "<b>/server</b>: Checks the server status. It will send a message to the room with the status of the pokemon go server. It will ping people on the subscriber list if the status changes.<br>" +
                 "<b>/help</b>: shows you what the commands do<br/>" +
                 "<b>/subs</b>: Displays the ping names of people who will receive notification if the server status changes<br/>" +
-            "<b>/add</b>: adds yourself to the subscriber list<br/>" +
-            "<b>/remove</b>: removes yourself from the subscriber list<br/>";
+                "<b>/add</b>: adds yourself to the subscriber list<br/>" +
+                "<b>/remove</b>: removes yourself from the subscriber list<br/>";
             sendMessage(req, helpString);
         }
     );
@@ -190,24 +190,28 @@ module.exports = function (app, addon) {
             var room = req.body.item.room;
 
             checkServer(req, function (status, text) {
-                getMentionsString(room, clientId, function (pings) {
-                    sendMessage(req, text + pings, {options: {notify: true}});
-                });
+                sendMessage(req, text);
                 if (!interval && status.includes("Offline") || status.includes("Unstable")) {
                     lastStatus = status;
                     interval = setInterval(function () {
                         checkServer(req, function (status, text) {
                             if (status.includes("Unstable") && lastStatus.includes("Offline")) {
-                                sendMessage(req, text);
+                                getMentionsString(room, clientId, function (pings) {
+                                    sendMessage(req, text + pings, {options: {notify: true}});
+                                });
                             }
                             if (status.includes("Offline") && lastStatus.includes("Unstable")) {
-                                sendMessage(req, text);
+                                getMentionsString(room, clientId, function (pings) {
+                                    sendMessage(req, text + pings, {options: {notify: true}});
+                                });
                             }
                             if (status.includes("Online")) {
                                 console.log("stopped interval");
                                 clearInterval(interval);
                                 interval = false;
-                                sendMessage(req, text);
+                                getMentionsString(room, clientId, function (pings) {
+                                    sendMessage(req, text + pings, {options: {notify: true}});
+                                });
                             }
                             lastStatus = status;
                         });
