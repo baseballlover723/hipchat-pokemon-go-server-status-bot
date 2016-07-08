@@ -6,10 +6,12 @@ var url = require('url');
 var fs = require('fs');
 var request = require('request');
 var cheerio = require('cheerio');
+var CircularBuffer = require("circular-buffer");
 
 var lastStatus;
+var statuses = new CircularBuffer(3);
 var interval;
-var REFRESH_RATE = 20 * 1000; // 20 seconds
+var REFRESH_RATE = 10 * 1000; // 10 seconds
 
 // This is the heart of your HipChat Connect add-on. For more information,
 // take a look at https://developer.atlassian.com/hipchat/tutorials/getting-started-with-atlassian-connect-express-node-js
@@ -191,22 +193,22 @@ module.exports = function (app, addon) {
 
             checkServer(req, function (status, text) {
                 sendMessage(req, text);
-                if (!interval && status.includes("Offline") || status.includes("Unstable")) {
+                if (!interval && (status.includes("Offline") || status.includes("Unstable"))) {
                     lastStatus = status;
+                    statuses.enq(status);
                     interval = setInterval(function () {
                         checkServer(req, function (status, text) {
-                            if (status.includes("Unstable") && lastStatus.includes("Offline")) {
+                            if (!seenStatusRecently(status)) {
+                                console.log(status + " not seen recently");
                                 getMentionsString(room, clientId, function (pings) {
                                     sendMessage(req, text + pings, {options: {notify: true}});
                                 });
-                            }
-                            if (status.includes("Offline") && lastStatus.includes("Unstable")) {
-                                getMentionsString(room, clientId, function (pings) {
-                                    sendMessage(req, text + pings, {options: {notify: true}});
-                                });
+                            } else {
+                                console.log(status + " seen recently");
                             }
                             if (status.includes("Online")) {
                                 console.log("stopped interval");
+                                clearStatuses();
                                 clearInterval(interval);
                                 interval = false;
                                 getMentionsString(room, clientId, function (pings) {
@@ -214,18 +216,11 @@ module.exports = function (app, addon) {
                                 });
                             }
                             lastStatus = status;
+                            statuses.enq(status);
                         });
                     }, REFRESH_RATE);
                 }
             });
-            // sendMessage(req, "called server", function (data) {
-            //     res.sendStatus(200);
-            // });
-
-            // hipchat.sendMessage(req.clientInfo, req.identity.roomId, 'called server')
-            //     .then(function (data) {
-            //         res.sendStatus(200);
-            //     });
         }
     );
 
@@ -283,6 +278,24 @@ module.exports = function (app, addon) {
         }
     );
 
+    function clearStatuses() {
+        while (statuses.size() > 0) {
+            statuses.deq();
+        }
+    }
+
+    function seenStatusRecently(statusString) {
+        var arr = statuses.toarray();
+        console.log("recently seen: " + arr);
+        for (var i in arr) {
+            var status = arr[i];
+            if (status.includes(statusString)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
     function getMentionsString(room, clientId, callback) {
         addon.settings.get(room.id, clientId).then(function (data) {
             data = data || [];
