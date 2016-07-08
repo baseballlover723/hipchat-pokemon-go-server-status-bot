@@ -5,11 +5,16 @@
   "scripts": {
     "start": "node app.js"
   },
+  "engines": {
+    "node": "6.2.1"
+  },
   "dependencies": {
     "atlassian-connect-express": "^1.0.10",
     "atlassian-connect-express-hipchat": "^0.3.5",
     "atlassian-connect-express-redis": "^0.1.6",
+    "babel": "^6.5.2",
     "body-parser": "^1.15.2",
+    "cheerio": "latest",
     "compression": "^1.6.2",
     "cors": "^2.7.1",
     "errorhandler": "^1.4.3",
@@ -17,11 +22,9 @@
     "express-hbs": "^1.0.1",
     "lodash": "^4.13.1",
     "morgan": "^1.7.0",
-    "request": "^2.72.0",
+    "request": "latest",
     "rsvp": "^3.2.1",
     "static-expiry": "^0.0.11",
-    "uuid": "^2.0.2",
-    "request": "latest",
-    "cheerio": "latest"
+    "uuid": "^2.0.2"
   }
 }
