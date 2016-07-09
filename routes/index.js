@@ -183,6 +183,7 @@ module.exports = function (app, addon) {
                 "<b>/start</b>: starts listening for server status changes" +
                 "<b>/stop</b>: stops listening for server status changes";
             sendMessage(req, helpString);
+            res.sendStatus(200);
         }
     );
 
@@ -197,6 +198,7 @@ module.exports = function (app, addon) {
                 sendMessage(req, text);
                 lastStatus = status;
                 statuses.enq(status);
+                res.sendStatus(200);
             });
         }
     );
@@ -214,6 +216,7 @@ module.exports = function (app, addon) {
                 } else {
                     sendMessage(req, user.name + " is already subscribed");
                 }
+                res.sendStatus(200);
             });
         }
     );
@@ -231,6 +234,7 @@ module.exports = function (app, addon) {
                 } else {
                     sendMessage(req, user.name + " wasn't subscribed");
                 }
+                res.sendStatus(200);
             });
         }
     );
@@ -255,6 +259,7 @@ module.exports = function (app, addon) {
                 } else {
                     sendMessage(req, "There are no subscribers :(");
                 }
+                res.sendStatus(200);
             });
         }
     );
@@ -271,6 +276,7 @@ module.exports = function (app, addon) {
                 } else {
                     sendMessage(req, "I'm already listening for server changes");
                 }
+                res.sendStatus(200);
             });
         }
     );
@@ -287,6 +293,7 @@ module.exports = function (app, addon) {
                 } else {
                     sendMessage(req, "I'm not listening for server changes");
                 }
+                res.sendStatus(200);
             });
         }
     );
