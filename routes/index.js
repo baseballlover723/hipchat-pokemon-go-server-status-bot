@@ -10,7 +10,7 @@ var CircularBuffer = require("circular-buffer");
 
 var lastStatus;
 var statuses = new CircularBuffer(3);
-var interval;
+var intervals = {};
 var REFRESH_RATE = 10 * 1000; // 10 seconds
 
 // This is the heart of your HipChat Connect add-on. For more information,
@@ -179,7 +179,9 @@ module.exports = function (app, addon) {
                 "<b>/help</b>: shows you what the commands do<br/>" +
                 "<b>/subs</b>: Displays the ping names of people who will receive notification if the server status changes<br/>" +
                 "<b>/add</b>: adds yourself to the subscriber list<br/>" +
-                "<b>/remove</b>: removes yourself from the subscriber list<br/>";
+                "<b>/remove</b>: removes yourself from the subscriber list<br/>" +
+                "<b>/start</b>: starts listening for server status changes" +
+                "<b>/stop</b>: stops listening for server status changes";
             sendMessage(req, helpString);
         }
     );
@@ -196,29 +198,6 @@ module.exports = function (app, addon) {
                 if (!interval && (status.includes("Offline") || status.includes("Unstable"))) {
                     lastStatus = status;
                     statuses.enq(status);
-                    interval = setInterval(function () {
-                        checkServer(req, function (status, text) {
-                            if (!seenStatusRecently(status)) {
-                                console.log(status + " not seen recently");
-                                getMentionsString(room, clientId, function (pings) {
-                                    sendMessage(req, text + pings, {options: {notify: true}});
-                                });
-                            } else {
-                                console.log(status + " seen recently");
-                            }
-                            if (status.includes("Online")) {
-                                console.log("stopped interval");
-                                clearStatuses();
-                                clearInterval(interval);
-                                interval = false;
-                                getMentionsString(room, clientId, function (pings) {
-                                    sendMessage(req, text + pings, {options: {notify: true}});
-                                });
-                            }
-                            lastStatus = status;
-                            statuses.enq(status);
-                        });
-                    }, REFRESH_RATE);
                 }
             });
         }
@@ -261,8 +240,12 @@ module.exports = function (app, addon) {
     app.post('/subs',
         addon.authenticate(),
         function (req, res) {
+            console.log("/subs");
             var clientId = req.body.oauth_client_id;
             var room = req.body.item.room;
+            addon.settings.get(room.id, clientId).then(function (data) {
+                console.log(data);
+            });
 
             getMentions(room, clientId, function (names) {
                 if (names.length > 0) {
@@ -278,6 +261,89 @@ module.exports = function (app, addon) {
         }
     );
 
+    app.post('/start',
+        addon.authenticate(),
+        function (req, res) {
+            var clientId = req.body.oauth_client_id;
+            var room = req.body.item.room;
+            getInterval(room, clientId, function (interval) {
+                if (!interval) {
+                    startInterval(req);
+                    sendMessage(req, "I'll let you know if the server status changes");
+                } else {
+                    sendMessage(req, "I'm already listening for server changes");
+                }
+            });
+        }
+    );
+
+    app.post('/stop',
+        addon.authenticate(),
+        function (req, res) {
+            var clientId = req.body.oauth_client_id;
+            var room = req.body.item.room;
+            getInterval(room, clientId, function (interval) {
+                if (interval) {
+                    removeInterval(room, clientId, interval);
+                    sendMessage(req, "I'm not listening for server changes anymore");
+                } else {
+                    sendMessage(req, "I'm not listening for server changes");
+                }
+            });
+        }
+    );
+
+    function startInterval(req) {
+        var clientId = req.body.oauth_client_id;
+        var room = req.body.item.room;
+        console.log("starting interval for room " + room.name);
+        interval = setInterval(function () {
+            checkServer(req, function (status, text) {
+                if (!seenStatusRecently(status)) {
+                    console.log(status + " not seen recently");
+                    getMentionsString(room, clientId, function (pings) {
+                        sendMessage(req, text + pings, {options: {notify: true}});
+                    });
+                } else {
+                    console.log(status + " seen recently");
+                }
+                if (status.includes("Online")) {
+                    // console.log("stopped interval");
+                    clearStatuses();
+                    // clearInterval(interval);
+                    // interval = false;
+                    if (seenStatusRecently("Unstable") || seenStatusRecently("Offline")) {
+                        getMentionsString(room, clientId, function (pings) {
+                            sendMessage(req, text + pings, {options: {notify: true}});
+                        });
+                    }
+                }
+                lastStatus = status;
+                statuses.enq(status);
+            });
+        }, REFRESH_RATE);
+        storeInterval(room, clientId, interval);
+    }
+
+    function storeInterval(room, clientId, interval) {
+        var roomId = room.id;
+        intervals[clientId] = intervals[clientId] || {};
+        intervals[clientId][roomId] = interval;
+        clearStatuses();
+    }
+
+    function removeInterval(room, clientId, interval) {
+        clearInterval(interval);
+        console.log("stopping interval for room " + room.name);
+        var roomId = room.id;
+        intervals[clientId][roomId] = false;
+    }
+
+    function getInterval(room, clientId, callback = function (interval) {}) {
+        var roomId = room.id;
+        callback(intervals[clientId] && intervals[clientId][roomId]);
+    }
+
     function clearStatuses() {
         while (statuses.size() > 0) {
             statuses.deq();
@@ -286,7 +352,6 @@ module.exports = function (app, addon) {
 
     function seenStatusRecently(statusString) {
         var arr = statuses.toarray();
-        console.log("recently seen: " + arr);
         for (var i in arr) {
             var status = arr[i];
             if (status.includes(statusString)) {
@@ -295,12 +360,11 @@ module.exports = function (app, addon) {
         }
         return false;
     }
-    
+
     function getMentionsString(room, clientId, callback) {
         addon.settings.get(room.id, clientId).then(function (data) {
-            data = data || [];
             var mentionNames = "";
-            data.forEach(function (user) {
+            data.pings.forEach(function (user) {
                 mentionNames += " @" + user.mention_name;
             });
 
@@ -310,9 +374,8 @@ module.exports = function (app, addon) {
 
     function getMentions(room, clientId, callback) {
         addon.settings.get(room.id, clientId).then(function (data) {
-            data = data || [];
             var mentionNames = [];
-            data.forEach(function (user) {
+            data.pings.forEach(function (user) {
                 mentionNames.push(user.mention_name);
             });
 
@@ -320,11 +383,10 @@ module.exports = function (app, addon) {
         });
     }
 
-    function addUser(room, user, clientId, callback = function () {}) {
+    function addUser(room, user, clientId, callback = function (added) {}) {
         addon.settings.get(room.id, clientId).then(function (data) {
-            data = data || [];
-            if (!includesUser(data, user)) {
-                data.push(user);
+            if (!includesUser(data.pings, user)) {
+                data.pings.push(user);
                 addon.settings.set(room.id, data, clientId);
                 callback(true);
             } else {
@@ -335,10 +397,9 @@ module.exports = function (app, addon) {
 
     function removeUser(room, user, clientId, callback = function () {}) {
         addon.settings.get(room.id, clientId).then(function (data) {
-            data = data || [];
             var index;
-            if (index = includesUser(data, user)) {
-                data.splice(index, 1);
+            if (index = includesUser(data.pings, user)) {
+                data.pings.splice(index, 1);
                 addon.settings.set(room.id, data, clientId);
                 callback(user);
             } else {
@@ -385,6 +446,14 @@ module.exports = function (app, addon) {
 // Connect's install flow, check out:
 // https://developer.atlassian.com/hipchat/guide/installation-flow
     addon.on('installed', function (clientKey, clientInfo, req) {
+        var clientId = req.body.oauthId;
+        var roomId = req.body.roomId;
+        intervals[clientId] = intervals[clientId] || {};
+        intervals[clientId][roomId] = intervals[clientId][roomId] || false;
+        addon.settings.get(roomId, clientId).then(function (data) {
+            data = {pings: []};
+            addon.settings.set(roomId, data, clientId);
+        });
         hipchat.sendMessage(clientInfo, req.body.roomId, 'The ' + addon.descriptor.name + ' add-on has been installed in this room').then(function (data) {
             hipchat.sendMessage(clientInfo, req.body.roomId, "use /help to find out what I do");
         });
@@ -395,7 +464,6 @@ module.exports = function (app, addon) {
 
 // Clean up clients when uninstalled
     addon.on('uninstalled', function (id) {
-        hipchat.sendMessage(clientInfo, req.body.roomId, 'The ' + addon.descriptor.name + ' add-on has been uninstalled in this room');
         addon.settings.client.keys(id + ':*', function (err, rep) {
             rep.forEach(function (k) {
                 addon.logger.info('Removing key:', k);

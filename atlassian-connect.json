@@ -65,6 +65,20 @@
         "authentication": "jwt"
       },
       {
+        "url": "{{localBaseUrl}}/start",
+        "pattern": "^/start",
+        "event": "room_message",
+        "name": "Hello!",
+        "authentication": "jwt"
+      },
+      {
+        "url": "{{localBaseUrl}}/stop",
+        "pattern": "^/stop",
+        "event": "room_message",
+        "name": "Hello!",
+        "authentication": "jwt"
+      },
+      {
         "url": "{{localBaseUrl}}/webhook",
         "pattern": "^/hello",
         "event": "room_message",
