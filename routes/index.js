@@ -195,10 +195,8 @@ module.exports = function (app, addon) {
 
             checkServer(req, function (status, text) {
                 sendMessage(req, text);
-                if (!interval && (status.includes("Offline") || status.includes("Unstable"))) {
-                    lastStatus = status;
-                    statuses.enq(status);
-                }
+                lastStatus = status;
+                statuses.enq(status);
             });
         }
     );
@@ -297,28 +295,46 @@ module.exports = function (app, addon) {
         var clientId = req.body.oauth_client_id;
         var room = req.body.item.room;
         console.log("starting interval for room " + room.name);
+        clearStatuses();
+        var first = true;
         interval = setInterval(function () {
             checkServer(req, function (status, text) {
-                if (!seenStatusRecently(status)) {
-                    console.log(status + " not seen recently");
+                if (first) {
                     getMentionsString(room, clientId, function (pings) {
+                        lastStatus = status;
                         sendMessage(req, text + pings, {options: {notify: true}});
                     });
-                } else {
-                    console.log(status + " seen recently");
-                }
-                if (status.includes("Online")) {
-                    // console.log("stopped interval");
-                    clearStatuses();
-                    // clearInterval(interval);
-                    // interval = false;
-                    if (seenStatusRecently("Unstable") || seenStatusRecently("Offline")) {
+                    first = false;
+                } else if (status.includes("Offline") || status.includes("Unstable")) {
+                    if (status.includes("Unstable") && !seenStatusRecently("Unstable")) {
                         getMentionsString(room, clientId, function (pings) {
+                            lastStatus = status;
+                            sendMessage(req, text + pings, {options: {notify: true}});
+                        });
+                    } else if (status.includes("Offline")) {
+                        if (allStatusRecently("Offline") && !lastStatus.includes("Offline")) {
+                            getMentionsString(room, clientId, function (pings) {
+                                lastStatus = status;
+                                sendMessage(req, text + pings, {options: {notify: true}});
+                            });
+                        }
+                        if (!seenStatusRecently("Offline") && !lastStatus.includes("Unstable")) {
+                            getMentionsString(room, clientId, function (pings) {
+                                lastStatus = "Unstable";
+                                sendMessage(req, text.replace("Offline", "Unstable") + pings,
+                                    {options: {notify: true}});
+                            });
+                        }
+                    }
+                } else if (status.includes("Online")) {
+                    if (!allStatusRecently("Online")) {
+                        clearStatuses();
+                        getMentionsString(room, clientId, function (pings) {
+                            lastStatus = status;
                             sendMessage(req, text + pings, {options: {notify: true}});
                         });
                     }
                 }
-                lastStatus = status;
                 statuses.enq(status);
             });
         }, REFRESH_RATE);
@@ -348,6 +364,20 @@ module.exports = function (app, addon) {
         while (statuses.size() > 0) {
             statuses.deq();
         }
+    }
+
+    function allStatusRecently(statusString) {
+        if (statuses.size() == 0) {
+            return false
+        }
+        var arr = statuses.toarray();
+        for (var i in arr) {
+            var status = arr[i];
+            if (!status.includes(statusString)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     function seenStatusRecently(statusString) {
