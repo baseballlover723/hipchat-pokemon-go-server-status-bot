@@ -1,0 +1,2 @@
+I store your user data in a reddis database, as reccommended by hipchat (https://developer.atlassian.com/hipchat/tutorials/getting-started-with-atlassian-connect-express-node-js)
+The bot knows which users want notifications and what room the bot is in.
