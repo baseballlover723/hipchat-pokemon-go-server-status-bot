@@ -1,9 +1,6 @@
-# Atlassian Add-on using Express
-
-Congratulations! You've successfully created a HipChat Connect Add-on using the Express web application framework.
-
-## What's next?
-
-* [Read the tutorial](https://developer.atlassian.com/hipchat/tutorials/getting-started-with-atlassian-connect-express-node-js).
-* [Read the HipChat Connect guides](https://developer.atlassian.com/hipchat/guide)
-* [View the HipChat API reference](https://www.hipchat.com/docs/apiv2)
+This is a hipchat bot that lets you know if the pokemon go servers are up. It scrapes from ""
+How to install:
+  1. goto "https://hipchat.com/addons/"
+  2. scroll to the bottom and click on "Install an integration from a descriptor URL"
+  3. enter this url "https://pokemongo-server-status-hc-bot.herokuapp.com/atlassian-connect.json"
+  4. bot should be installed, message me or make an issue if you run into issues.
