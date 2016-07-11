@@ -12,7 +12,7 @@ var lastStatus;
 var statuses = new CircularBuffer(3);
 var intervals = {};
 var REFRESH_RATE = 10 * 1000; // 10 seconds
-var VERSION = "3.0.1";
+var VERSION = "3.1.0";
 
 // This is the heart of your HipChat Connect add-on. For more information,
 // take a look at https://developer.atlassian.com/hipchat/tutorials/getting-started-with-atlassian-connect-express-node-js
@@ -282,25 +282,27 @@ module.exports = function (app, addon) {
     app.post('/version',
         addon.authenticate(),
         function (req, res) {
-            getData(req, function(data) {
-                sendMessage(req, data.version);
+            checkVersion(req, function(installedVersion, needUpgrade){
+                if (needUpgrade) {
+                    sendMessage(req, installedVersion + " you need to upgrade, latest version is " + VERSION);
+                } else {
+                    sendMessage(req, VERSION + " (up to date)");
+                }
                 res.sendStatus(200);
             });
         }
     );
 
-    function getData(req, callback = function(data) {}) {
-        var clientId = req.body.oauth_client_id;
-        var roomId = req.body.item.room.id;
-        addon.settings.get(roomId, clientId).then(function (data) {
-            callback(data);
+    function checkVersion(req, callback = function(installedVersion, needUpgrade) {}) {
+        getData(req, function(data) {
+            callback(data.version, needUpgrade(data.version));
         });
     }
 
-    function setData(req, data) {
-        var clientId = req.body.oauth_client_id;
-        var roomId = req.body.item.room.id;
-        addon.settings.set(roomId, data, clientId);
+    function needUpgrade(installedVersion) {
+        var installedMajor = parseInt(installedVersion.split(".")[0]);
+        var major = parseInt(VERSION.split(".")[0]);
+        return installedMajor < major;
     }
 
     function startInterval(req) {
@@ -484,6 +486,20 @@ module.exports = function (app, addon) {
         });
     }
 
+    function getData(req, callback = function(data) {}) {
+        var clientId = req.body.oauth_client_id;
+        var roomId = req.body.item.room.id;
+        addon.settings.get(roomId, clientId).then(function (data) {
+            callback(data);
+        });
+    }
+
+    function setData(req, data) {
+        var clientId = req.body.oauth_client_id;
+        var roomId = req.body.item.room.id;
+        addon.settings.set(roomId, data, clientId);
+    }
+
 // Notify the room that the add-on was installed. To learn more about
 // Connect's install flow, check out:
 // https://developer.atlassian.com/hipchat/guide/installation-flow
@@ -513,9 +529,7 @@ module.exports = function (app, addon) {
             });
         });
     });
-
-}
-;
+};
 
 String.prototype.replaceAll = function (search, replacement) {
     var target = this;
