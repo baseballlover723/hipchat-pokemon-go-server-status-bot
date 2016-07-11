@@ -86,6 +86,20 @@
         "authentication": "jwt"
       },
       {
+        "url": "{{localBaseUrl}}/mute",
+        "pattern": "^\/mute[^s]",
+        "event": "room_message",
+        "name": "Hello!",
+        "authentication": "jwt"
+      },
+      {
+        "url": "{{localBaseUrl}}/mutes",
+        "pattern": "^\/mutes$",
+        "event": "room_message",
+        "name": "Hello!",
+        "authentication": "jwt"
+      },
+      {
         "url": "{{localBaseUrl}}/webhook",
         "pattern": "^/hello",
         "event": "room_message",

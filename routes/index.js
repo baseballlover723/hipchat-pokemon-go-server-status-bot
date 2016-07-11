@@ -7,12 +7,13 @@ var fs = require('fs');
 var request = require('request');
 var cheerio = require('cheerio');
 var CircularBuffer = require("circular-buffer");
+var parseDuration = require('parse-duration');
 
 var lastStatus;
 var statuses = new CircularBuffer(3);
 var intervals = {};
 var REFRESH_RATE = 10 * 1000; // 10 seconds
-var VERSION = "3.1.0";
+var VERSION = "4.0.0";
 
 // This is the heart of your HipChat Connect add-on. For more information,
 // take a look at https://developer.atlassian.com/hipchat/tutorials/getting-started-with-atlassian-connect-express-node-js
@@ -161,7 +162,7 @@ module.exports = function (app, addon) {
             // console.log(req.body);
             var clientId = req.body.oauth_client_id;
             var room = req.body.item.room;
-            // addon.settings.set(room.id, [], clientId);
+             addon.settings.set(room.id, {version: VERSION, pings: [], muted: []}, clientId);
             console.log(req.body.item.message.message);
             hipchat.sendMessage(req.clientInfo, req.identity.roomId, 'pong pong')
                 .then(function (data) {
@@ -180,7 +181,9 @@ module.exports = function (app, addon) {
                 "<b>/remove</b>: removes yourself from the subscriber list<br/>" +
                 "<b>/start</b>: starts listening for server status changes<br/>" +
                 "<b>/stop</b>: stops listening for server status changes<br/>" +
-                "<b>/version</b>, <b>/v</b>: lists the version of the bot in the form 'major.minor.patch'. If the major numbers are different, you need to uninstall and reinstall the bot to get the latest features<br/>";
+                "<b>/version</b>, <b>/v</b>: lists the version of the bot in the form 'major.minor.patch'. If the major numbers are different, you need to uninstall and reinstall the bot to get the latest features<br/>" +
+                "<b>/mute</b>: unsubscribes you for the time specified (/mute 20 s, /mute 30 minutes )<br/>" +
+                "<b>/mutes</b>: displays the people who have muted and how much longer they have left<br/>";
             sendMessage(req, helpString);
             res.sendStatus(200);
         }
@@ -233,7 +236,6 @@ module.exports = function (app, addon) {
     app.post('/subs',
         addon.authenticate(),
         function (req, res) {
-            console.log("/subs");
             getMentions(req, function (names) {
                 if (names.length > 0) {
                     var message = "current subs are (ping names): ";
@@ -288,6 +290,30 @@ module.exports = function (app, addon) {
                 } else {
                     sendMessage(req, VERSION + " (up to date)");
                 }
+                res.sendStatus(200);
+            });
+        }
+    );
+
+    app.post('/mute',
+        addon.authenticate(),
+        function (req, res) {
+            addMute(req, function(user, time) {
+                if (time) {
+                    sendMessage(req, "muted " + user.name + " for " + timeConversion(time));
+                } else {
+                    sendMessage(req, user.name + " is not getting notifications");
+                }
+                res.sendStatus(200);
+            });
+        }
+    );
+
+    app.post('/mutes',
+        addon.authenticate(),
+        function (req, res) {
+            getMutesString(req, function(mutesString) {
+                sendMessage(req, mutesString);
                 res.sendStatus(200);
             });
         }
@@ -407,24 +433,97 @@ module.exports = function (app, addon) {
     }
 
     function getMentionsString(req, callback) {
-        getData(req, function(data) {
-            var mentionNames = "";
-            data.pings.forEach(function (user) {
-                mentionNames += " @" + user.mention_name;
-            });
+        checkMuted(req, function() {
+            getData(req, function(data) {
+                var mentionNames = "";
+                data.pings.forEach(function (user) {
+                    mentionNames += " @" + user.mention_name;
+                });
 
-            callback(mentionNames);
+                callback(mentionNames);
+            });
         });
     }
 
     function getMentions(req, callback) {
-        getData(req, function(data) {
-            var mentionNames = [];
-            data.pings.forEach(function (user) {
-                mentionNames.push(user.mention_name);
-            });
+        checkMuted(req, function() {
+            getData(req, function(data) {
+                var mentionNames = [];
+                data.pings.forEach(function (user) {
+                    mentionNames.push(user.mention_name);
+                });
 
-            callback(mentionNames);
+                callback(mentionNames);
+            });
+        });
+    }
+
+    function getMutesString(req, callback = function(mutesString) {}) {
+        checkMuted(req, function() {
+            getData(req, function(data) {
+                var now = new Date();
+                var mutesString = "";
+                if (data.muted.length > 0) {
+                    for (var mute of data.muted) {
+                        mutesString += mute.user.name;
+                        mutesString += ": ";
+                        mutesString += timeConversion(new Date(mute.endTime) - now);
+                        mutesString += "<br/>\n";
+                    }
+                } else {
+                    mutesString = "No one is currently being muted";
+                }
+                callback(mutesString);
+            });
+        });
+    }
+
+    function addMute(req, callback = function(user, time) {}) {
+        var user = req.body.item.message.from;
+        var time = parseDuration(req.body.item.message.message);
+        var endTime = new Date(new Date().getTime() + time);
+        var found = false;
+        getData(req, function(data) {
+            for (var index in data.muted) {
+                var muted = data.muted[index];
+                if (muted.user.id == user.id) {
+                    muted.endTime = endTime.getTime();
+                    found = true;
+                    setData(req, data);
+                    callback(user, time);
+                    return;
+                }
+            }
+            var userIndex;
+            if (!found) {
+                if ((userIndex = includesUser(data.pings, user))) {
+                    data.pings.splice(userIndex, 1);
+                    data.muted.push({user: user, endTime: endTime.getTime()});
+                    setData(req, data);
+                    callback(user, time);
+                } else {
+                    callback(user, false);
+                }
+            }
+        });
+
+    }
+
+    function checkMuted(req, callback = function() {}){
+        var currentTime = new Date();
+        getData(req, function(data) {
+            for (var index in data.muted) {
+                var muted = data.muted[index];
+                var user = muted.user;
+                if (muted.endTime < currentTime) {
+                    data.muted.splice(index, 1);
+                    if (!includesUser(data.pings, user)) {
+                        data.pings.push(user);
+                    }
+                }
+            }
+            setData(req, data);
+            callback();
         });
     }
 
@@ -509,7 +608,7 @@ module.exports = function (app, addon) {
         intervals[clientId] = intervals[clientId] || {};
         intervals[clientId][roomId] = intervals[clientId][roomId] || false;
         addon.settings.get(roomId, clientId).then(function (data) {
-            data = {version: VERSION, pings: []};
+            data = {version: VERSION, pings: [], muted: []};
             addon.settings.set(roomId, data, clientId);
         });
         hipchat.sendMessage(clientInfo, req.body.roomId, 'The ' + addon.descriptor.name + ' add-on has been installed in this room').then(function (data) {
@@ -535,3 +634,20 @@ String.prototype.replaceAll = function (search, replacement) {
     var target = this;
     return target.replace(new RegExp(search, 'g'), replacement);
 };
+
+function timeConversion(millisec) {
+    var seconds = (millisec / 1000).toFixed(2);
+    var minutes = (millisec / (1000 * 60)).toFixed(2);
+    var hours = (millisec / (1000 * 60 * 60)).toFixed(2);
+    var days = (millisec / (1000 * 60 * 60 * 24)).toFixed(2);
+
+    if (seconds < 60) {
+        return seconds + " Seconds";
+    } else if (minutes < 60) {
+        return minutes + " Minutes";
+    } else if (hours < 24) {
+        return hours + " Hours";
+    } else {
+        return days + " Days"
+    }
+}
