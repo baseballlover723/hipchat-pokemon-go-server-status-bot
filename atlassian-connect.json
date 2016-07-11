@@ -18,8 +18,8 @@
         "admin_room"
       ],
       "avatar": {
-        "url": "{{localBaseUrl}}/img/logo.png",
-        "url@2x": "{{localBaseUrl}}/img/logo.png"
+        "url": "{{localBaseUrl}}/img/icon.jpg",
+        "url@2x": "{{localBaseUrl}}/img/icon.jpg"
       }
     },
     "installable": {
@@ -110,58 +110,14 @@
     "glance": [
       {
         "name": {
-          "value": "Hello!"
+          "value": "Pokemon Go Server Status"
         },
         "queryUrl": "{{localBaseUrl}}/glance",
-        "key": "sample.glance",
-        "target": "sample.sidebar",
+        "key": "serverStatus.glance",
         "icon": {
-          "url": "{{localBaseUrl}}/img/logo.png",
-          "url@2x": "{{localBaseUrl}}/img/logo.png"
+          "url": "{{localBaseUrl}}/img/icon.jpg",
+          "url@2x": "{{localBaseUrl}}/img/icon.jpg"
         }
-      }
-    ],
-    "webPanel": [
-      {
-        "key": "sample.sidebar",
-        "name": {
-          "value": "Hello Sidebar!"
-        },
-        "location": "hipchat.sidebar.right",
-        "url": "{{localBaseUrl}}/sidebar"
-      }
-    ],
-    "dialog": [
-      {
-        "key": "sample.dialog",
-        "title": {
-          "value": "Hello Dialog!"
-        },
-        "url": "{{localBaseUrl}}/dialog",
-        "options": {
-          "style": "normal",
-          "primaryAction": {
-            "name": {
-              "value": "Say Hello!"
-            },
-            "key": "sample.dialog.action",
-            "enabled": true
-          },
-          "size": {
-            "width": "400px",
-            "height": "200px"
-          }
-        }
-      }
-    ],
-    "action": [
-      {
-        "key": "sample.action",
-        "name": {
-          "value": "Open Hello Dialog!"
-        },
-        "target": "sample.dialog",
-        "location": "hipchat.input.action"
       }
     ]
   }

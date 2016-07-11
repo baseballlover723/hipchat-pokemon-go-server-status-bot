@@ -13,7 +13,7 @@ var lastStatus;
 var statuses = new CircularBuffer(3);
 var intervals = {};
 var REFRESH_RATE = 10 * 1000; // 10 seconds
-var VERSION = "4.0.0";
+var VERSION = "5.0.0";
 
 // This is the heart of your HipChat Connect add-on. For more information,
 // take a look at https://developer.atlassian.com/hipchat/tutorials/getting-started-with-atlassian-connect-express-node-js
@@ -70,89 +70,70 @@ module.exports = function (app, addon) {
         cors(),
         addon.authenticate(),
         function (req, res) {
-            res.json({
-                "label": {
-                    "type": "html",
-                    "value": "Server status here!"
-                },
-                "status": {
-                    "type": "lozenge",
-                    "value": {
-                        "label": "TODO",
-                        "type": "error"
-                    }
+            console.log("/glance");
+            url = 'http://cmmcd.com/PokemonGo/';
+            request(url, function (error, response, text) {
+                if (!error) {
+                    var $ = cheerio.load(text);
+                    var status;
+                    $('.jumbotron table tr td h2').filter(function () {
+                        var data = $(this);
+                        text = data.text();
+                        status = data.children().first().text();
+
+                        var type;
+                        if (status.includes("Online")) {
+                            type = "success";
+                        } else if (status.includes("Unstable")) {
+                            type = "current";
+                        } else {
+                            type = "error";
+                        }
+                        res.json({
+                            "label": {
+                                "type": "html",
+                                "value": "PoGo Server Is "
+                            },
+                            "status": {
+                                "type": "lozenge",
+                                "value": {
+                                    "label": status,
+                                    "type": type
+                                }
+                            }
+                        });
+                    });
                 }
             });
         }
     );
 
-    // This is an example end-point that you can POST to to update the glance info
-    // Room update API: https://www.hipchat.com/docs/apiv2/method/room_addon_ui_update
-    // Group update API: https://www.hipchat.com/docs/apiv2/method/addon_ui_update
-    // User update API: https://www.hipchat.com/docs/apiv2/method/user_addon_ui_update
-    app.post('/update_glance',
-        cors(),
-        addon.authenticate(),
-        function (req, res) {
-            res.json({
-                "label": {
-                    "type": "html",
-                    "value": "Server status here!"
-                },
-                "status": {
-                    "type": "lozenge",
-                    "value": {
-                        "label": "TODO",
-                        "type": "success"
-                    }
+    function updateGlance(req, status, text) {
+        console.log("update glance to " + status);
+        var type;
+        if (status.includes("Online")) {
+            type = "success";
+        } else if (status.includes("Unstable")) {
+            type = "current";
+        } else {
+            type = "error";
+        }
+        var clientId = req.body.oauth_client_id;
+        var roomId = req.body.item.room.id;
+        hipchat.sendGlance(clientId, roomId,"serverStatus.glance", {
+            "label": {
+                "type": "html",
+                "value": "PoGo Server Is "
+            },
+            "status": {
+                "type": "lozenge",
+                "value": {
+                    "label": status,
+                    "type": type
                 }
-            });
-        }
-    );
-
-    // This is an example sidebar controller that can be launched when clicking on the glance.
-    // https://developer.atlassian.com/hipchat/guide/dialog-and-sidebar-views/sidebar
-    app.get('/sidebar',
-        addon.authenticate(),
-        function (req, res) {
-            res.render('sidebar', {
-                identity: req.identity
-            });
-        }
-    );
-
-    // This is an example dialog controller that can be launched when clicking on the glance.
-    // https://developer.atlassian.com/hipchat/guide/dialog-and-sidebar-views/dialog
-    app.get('/dialog',
-        addon.authenticate(),
-        function (req, res) {
-            res.render('dialog', {
-                identity: req.identity
-            });
-        }
-    );
-
-    // Sample endpoint to send a card notification back into the chat room
-    // See https://developer.atlassian.com/hipchat/guide/sending-messages
-    app.post('/send_notification',
-        addon.authenticate(),
-        function (req, res) {
-            var card = {
-                "style": "link",
-                "url": "https://www.hipchat.com",
-                "id": uuid.v4(),
-                "title": req.body.messageTitle,
-                "description": "Great teams use HipChat: Group and private chat, file sharing, and integrations",
-                "icon": {
-                    "url": "https://hipchat-public-m5.atlassian.com/assets/img/hipchat/bookmark-icons/favicon-192x192.png"
-                }
-            };
-            var msg = '<b>' + card.title + '</b>: ' + card.description;
-            var opts = {'options': {'color': 'yellow'}};
-            hipchat.sendMessage(req.clientInfo, req.identity.roomId, msg, opts, card);
-            res.json({status: "ok"});
-        }
-    );
+            }
+        });
+    }
 
     // This is an example route to handle an incoming webhook
     // https://developer.atlassian.com/hipchat/guide/webhooks
@@ -162,7 +143,7 @@ module.exports = function (app, addon) {
             // console.log(req.body);
             var clientId = req.body.oauth_client_id;
             var room = req.body.item.room;
-             addon.settings.set(room.id, {version: VERSION, pings: [], muted: []}, clientId);
+            addon.settings.set(room.id, {version: VERSION, pings: [], muted: []}, clientId);
             console.log(req.body.item.message.message);
             hipchat.sendMessage(req.clientInfo, req.identity.roomId, 'pong pong')
                 .then(function (data) {
@@ -192,7 +173,7 @@ module.exports = function (app, addon) {
     app.post('/server',
         addon.authenticate(),
         function (req, res) {
-            checkServer(function (status, text) {
+            checkServer(req, function (status, text) {
                 sendMessage(req, text);
                 lastStatus = status;
                 statuses.enq(status);
@@ -284,7 +265,7 @@ module.exports = function (app, addon) {
     app.post('/version',
         addon.authenticate(),
         function (req, res) {
-            checkVersion(req, function(installedVersion, needUpgrade){
+            checkVersion(req, function (installedVersion, needUpgrade) {
                 if (needUpgrade) {
                     sendMessage(req, installedVersion + " you need to upgrade, latest version is " + VERSION);
                 } else {
@@ -298,7 +279,7 @@ module.exports = function (app, addon) {
     app.post('/mute',
         addon.authenticate(),
         function (req, res) {
-            addMute(req, function(user, time) {
+            addMute(req, function (user, time) {
                 if (time) {
                     sendMessage(req, "muted " + user.name + " for " + timeConversion(time));
                 } else {
@@ -312,15 +293,15 @@ module.exports = function (app, addon) {
     app.post('/mutes',
         addon.authenticate(),
         function (req, res) {
-            getMutesString(req, function(mutesString) {
+            getMutesString(req, function (mutesString) {
                 sendMessage(req, mutesString);
                 res.sendStatus(200);
             });
         }
     );
 
-    function checkVersion(req, callback = function(installedVersion, needUpgrade) {}) {
-        getData(req, function(data) {
+    function checkVersion(req, callback = function (installedVersion, needUpgrade) {}) {
+        getData(req, function (data) {
             callback(data.version, needUpgrade(data.version));
         });
     }
@@ -337,7 +318,7 @@ module.exports = function (app, addon) {
         clearStatuses();
         var first = true;
         interval = setInterval(function () {
-            checkServer(function (status, text) {
+            checkServer(req, function (status, text) {
                 if (first) {
                     getMentionsString(req, function (pings) {
                         lastStatus = status;
@@ -389,10 +370,10 @@ module.exports = function (app, addon) {
 
     function removeInterval(req, interval) {
         var clientId = req.body.oauth_client_id;
-        var roomId = req.body.item.room.id;
+        var room = req.body.item.room;
         clearInterval(interval);
         console.log("stopping interval for room " + room.name);
-        intervals[clientId][roomId] = false;
+        intervals[clientId][room.id] = false;
     }
 
     function getInterval(req, callback = function (interval) {}) {
@@ -433,8 +414,8 @@ module.exports = function (app, addon) {
     }
 
     function getMentionsString(req, callback) {
-        checkMuted(req, function() {
-            getData(req, function(data) {
+        checkMuted(req, function () {
+            getData(req, function (data) {
                 var mentionNames = "";
                 data.pings.forEach(function (user) {
                     mentionNames += " @" + user.mention_name;
@@ -446,8 +427,8 @@ module.exports = function (app, addon) {
     }
 
     function getMentions(req, callback) {
-        checkMuted(req, function() {
-            getData(req, function(data) {
+        checkMuted(req, function () {
+            getData(req, function (data) {
                 var mentionNames = [];
                 data.pings.forEach(function (user) {
                     mentionNames.push(user.mention_name);
@@ -458,9 +439,9 @@ module.exports = function (app, addon) {
         });
     }
 
-    function getMutesString(req, callback = function(mutesString) {}) {
-        checkMuted(req, function() {
-            getData(req, function(data) {
+    function getMutesString(req, callback = function (mutesString) {}) {
+        checkMuted(req, function () {
+            getData(req, function (data) {
                 var now = new Date();
                 var mutesString = "";
                 if (data.muted.length > 0) {
@@ -478,12 +459,12 @@ module.exports = function (app, addon) {
         });
     }
 
-    function addMute(req, callback = function(user, time) {}) {
+    function addMute(req, callback = function (user, time) {}) {
         var user = req.body.item.message.from;
         var time = parseDuration(req.body.item.message.message);
         var endTime = new Date(new Date().getTime() + time);
         var found = false;
-        getData(req, function(data) {
+        getData(req, function (data) {
             for (var index in data.muted) {
                 var muted = data.muted[index];
                 if (muted.user.id == user.id) {
@@ -509,9 +490,9 @@ module.exports = function (app, addon) {
 
     }
 
-    function checkMuted(req, callback = function() {}){
+    function checkMuted(req, callback = function () {}) {
         var currentTime = new Date();
-        getData(req, function(data) {
+        getData(req, function (data) {
             for (var index in data.muted) {
                 var muted = data.muted[index];
                 var user = muted.user;
@@ -528,7 +509,7 @@ module.exports = function (app, addon) {
     }
 
     function addUser(req, user, callback = function (added) {}) {
-        getData(req, function(data) {
+        getData(req, function (data) {
             if (!includesUser(data.pings, user)) {
                 data.pings.push(user);
                 setData(req, data);
@@ -540,7 +521,7 @@ module.exports = function (app, addon) {
     }
 
     function removeUser(req, user, callback = function () {}) {
-        getData(req, function(data) {
+        getData(req, function (data) {
             var index;
             if (index = includesUser(data.pings, user)) {
                 data.pings.splice(index, 1);
@@ -566,7 +547,7 @@ module.exports = function (app, addon) {
         hipchat.sendMessage(req.clientInfo, req.identity.roomId, message, ops);
     }
 
-    function checkServer(callback = function (status, text) {}) {
+    function checkServer(req, callback = function (status, text) {}) {
         url = 'http://cmmcd.com/PokemonGo/';
         request(url, function (error, response, text) {
             if (!error) {
@@ -579,13 +560,14 @@ module.exports = function (app, addon) {
                     status = data.children().first().text();
 
                     console.log("check server: " + text);
+                    updateGlance(req, status, text);
                     callback(status, text);
                 });
             }
         });
     }
 
-    function getData(req, callback = function(data) {}) {
+    function getData(req, callback = function (data) {}) {
         var clientId = req.body.oauth_client_id;
         var roomId = req.body.item.room.id;
         addon.settings.get(roomId, clientId).then(function (data) {
@@ -614,7 +596,7 @@ module.exports = function (app, addon) {
         hipchat.sendMessage(clientInfo, req.body.roomId, 'The ' + addon.descriptor.name + ' add-on has been installed in this room').then(function (data) {
             hipchat.sendMessage(clientInfo, req.body.roomId, "use /help to find out what I do");
         });
-        checkServer(function (status, text) {
+        checkServer({body: {oauth_client_id: clientId, item: {room: {id: roomId}}}}, function (status, text) {
             lastStatus = status;
         });
     });
