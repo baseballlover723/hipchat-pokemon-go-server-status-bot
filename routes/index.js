@@ -12,6 +12,7 @@ var lastStatus;
 var statuses = new CircularBuffer(3);
 var intervals = {};
 var REFRESH_RATE = 10 * 1000; // 10 seconds
+var VERSION = "3.0.1";
 
 // This is the heart of your HipChat Connect add-on. For more information,
 // take a look at https://developer.atlassian.com/hipchat/tutorials/getting-started-with-atlassian-connect-express-node-js
@@ -172,16 +173,14 @@ module.exports = function (app, addon) {
     app.post('/help',
         addon.authenticate(),
         function (req, res) {
-            var clientId = req.body.oauth_client_id;
-            var room = req.body.item.room;
-            var user = req.body.item.message.from;
             helpString = "<b>/server</b>: Checks the server status. It will send a message to the room with the status of the pokemon go server. It will ping people on the subscriber list if the status changes.<br>" +
-                "<b>/help</b>: shows you what the commands do<br/>" +
+                "<b>/help</b>, <b>/h</b>: shows you what the commands do<br/>" +
                 "<b>/subs</b>: Displays the ping names of people who will receive notification if the server status changes<br/>" +
                 "<b>/add</b>: adds yourself to the subscriber list<br/>" +
                 "<b>/remove</b>: removes yourself from the subscriber list<br/>" +
-                "<b>/start</b>: starts listening for server status changes" +
-                "<b>/stop</b>: stops listening for server status changes";
+                "<b>/start</b>: starts listening for server status changes<br/>" +
+                "<b>/stop</b>: stops listening for server status changes<br/>" +
+                "<b>/version</b>, <b>/v</b>: lists the version of the bot in the form 'major.minor.patch'. If the major numbers are different, you need to uninstall and reinstall the bot to get the latest features<br/>";
             sendMessage(req, helpString);
             res.sendStatus(200);
         }
@@ -190,11 +189,7 @@ module.exports = function (app, addon) {
     app.post('/server',
         addon.authenticate(),
         function (req, res) {
-            console.log(req.body.item.message.message);
-            var clientId = req.body.oauth_client_id;
-            var room = req.body.item.room;
-
-            checkServer(req, function (status, text) {
+            checkServer(function (status, text) {
                 sendMessage(req, text);
                 lastStatus = status;
                 statuses.enq(status);
@@ -206,11 +201,9 @@ module.exports = function (app, addon) {
     app.post('/add',
         addon.authenticate(),
         function (req, res) {
-            var clientId = req.body.oauth_client_id;
-            var room = req.body.item.room;
             var user = req.body.item.message.from;
 
-            addUser(room, user, clientId, function (added) {
+            addUser(req, user, function (added) {
                 if (added) {
                     sendMessage(req, "added " + user.name + " to subscriber list");
                 } else {
@@ -224,11 +217,9 @@ module.exports = function (app, addon) {
     app.post('/remove',
         addon.authenticate(),
         function (req, res) {
-            var clientId = req.body.oauth_client_id;
-            var room = req.body.item.room;
             var user = req.body.item.message.from;
 
-            removeUser(room, user, clientId, function (removed) {
+            removeUser(req, user, function (removed) {
                 if (removed) {
                     sendMessage(req, user.name + " has unsubscribed :(");
                 } else {
@@ -243,13 +234,7 @@ module.exports = function (app, addon) {
         addon.authenticate(),
         function (req, res) {
             console.log("/subs");
-            var clientId = req.body.oauth_client_id;
-            var room = req.body.item.room;
-            addon.settings.get(room.id, clientId).then(function (data) {
-                console.log(data);
-            });
-
-            getMentions(room, clientId, function (names) {
+            getMentions(req, function (names) {
                 if (names.length > 0) {
                     var message = "current subs are (ping names): ";
                     names.forEach(function (name) {
@@ -267,9 +252,7 @@ module.exports = function (app, addon) {
     app.post('/start',
         addon.authenticate(),
         function (req, res) {
-            var clientId = req.body.oauth_client_id;
-            var room = req.body.item.room;
-            getInterval(room, clientId, function (interval) {
+            getInterval(req, function (interval) {
                 if (!interval) {
                     startInterval(req);
                     sendMessage(req, "I'll let you know if the server status changes");
@@ -284,11 +267,9 @@ module.exports = function (app, addon) {
     app.post('/stop',
         addon.authenticate(),
         function (req, res) {
-            var clientId = req.body.oauth_client_id;
-            var room = req.body.item.room;
-            getInterval(room, clientId, function (interval) {
+            getInterval(req, function (interval) {
                 if (interval) {
-                    removeInterval(room, clientId, interval);
+                    removeInterval(req, interval);
                     sendMessage(req, "I'm not listening for server changes anymore");
                 } else {
                     sendMessage(req, "I'm not listening for server changes");
@@ -298,45 +279,67 @@ module.exports = function (app, addon) {
         }
     );
 
-    function startInterval(req) {
+    app.post('/version',
+        addon.authenticate(),
+        function (req, res) {
+            getData(req, function(data) {
+                sendMessage(req, data.version);
+                res.sendStatus(200);
+            });
+        }
+    );
+
+    function getData(req, callback = function(data) {}) {
         var clientId = req.body.oauth_client_id;
+        var roomId = req.body.item.room.id;
+        addon.settings.get(roomId, clientId).then(function (data) {
+            callback(data);
+        });
+    }
+
+    function setData(req, data) {
+        var clientId = req.body.oauth_client_id;
+        var roomId = req.body.item.room.id;
+        addon.settings.set(roomId, data, clientId);
+    }
+
+    function startInterval(req) {
         var room = req.body.item.room;
         console.log("starting interval for room " + room.name);
         clearStatuses();
         var first = true;
         interval = setInterval(function () {
-            checkServer(req, function (status, text) {
+            checkServer(function (status, text) {
                 if (first) {
-                    getMentionsString(room, clientId, function (pings) {
+                    getMentionsString(req, function (pings) {
                         lastStatus = status;
                         sendMessage(req, text + pings, {options: {notify: true}});
                     });
                     first = false;
                 } else if (status.includes("Offline") || status.includes("Unstable")) {
                     if (status.includes("Unstable") && !seenStatusRecently("Unstable")) {
-                        getMentionsString(room, clientId, function (pings) {
+                        getMentionsString(req, function (pings) {
                             lastStatus = status;
                             sendMessage(req, text + pings, {options: {notify: true}});
                         });
                     } else if (status.includes("Offline")) {
                         if (allStatusRecently("Offline") && !lastStatus.includes("Offline")) {
-                            getMentionsString(room, clientId, function (pings) {
+                            getMentionsString(req, function (pings) {
                                 lastStatus = status;
                                 sendMessage(req, text + pings, {options: {notify: true}});
                             });
                         }
                         if (!seenStatusRecently("Offline") && !lastStatus.includes("Unstable")) {
-                            getMentionsString(room, clientId, function (pings) {
+                            getMentionsString(req, function (pings) {
                                 lastStatus = "Unstable";
-                                sendMessage(req, text.replace("Offline", "Unstable") + pings,
-                                    {options: {notify: true}});
+                                sendMessage(req, text.replace("Offline", "Unstable") + pings, {options: {notify: true}});
                             });
                         }
                     }
                 } else if (status.includes("Online")) {
                     if (!allStatusRecently("Online")) {
                         clearStatuses();
-                        getMentionsString(room, clientId, function (pings) {
+                        getMentionsString(req, function (pings) {
                             lastStatus = status;
                             sendMessage(req, text + pings, {options: {notify: true}});
                         });
@@ -345,25 +348,28 @@ module.exports = function (app, addon) {
                 statuses.enq(status);
             });
         }, REFRESH_RATE);
-        storeInterval(room, clientId, interval);
+        storeInterval(req, interval);
     }
 
-    function storeInterval(room, clientId, interval) {
-        var roomId = room.id;
+    function storeInterval(req, interval) {
+        var clientId = req.body.oauth_client_id;
+        var roomId = req.body.item.room.id;
         intervals[clientId] = intervals[clientId] || {};
         intervals[clientId][roomId] = interval;
         clearStatuses();
     }
 
-    function removeInterval(room, clientId, interval) {
+    function removeInterval(req, interval) {
+        var clientId = req.body.oauth_client_id;
+        var roomId = req.body.item.room.id;
         clearInterval(interval);
         console.log("stopping interval for room " + room.name);
-        var roomId = room.id;
         intervals[clientId][roomId] = false;
     }
 
-    function getInterval(room, clientId, callback = function (interval) {}) {
-        var roomId = room.id;
+    function getInterval(req, callback = function (interval) {}) {
+        var clientId = req.body.oauth_client_id;
+        var roomId = req.body.item.room.id;
         callback(intervals[clientId] && intervals[clientId][roomId]);
     }
 
@@ -398,8 +404,8 @@ module.exports = function (app, addon) {
         return false;
     }
 
-    function getMentionsString(room, clientId, callback) {
-        addon.settings.get(room.id, clientId).then(function (data) {
+    function getMentionsString(req, callback) {
+        getData(req, function(data) {
             var mentionNames = "";
             data.pings.forEach(function (user) {
                 mentionNames += " @" + user.mention_name;
@@ -409,8 +415,8 @@ module.exports = function (app, addon) {
         });
     }
 
-    function getMentions(room, clientId, callback) {
-        addon.settings.get(room.id, clientId).then(function (data) {
+    function getMentions(req, callback) {
+        getData(req, function(data) {
             var mentionNames = [];
             data.pings.forEach(function (user) {
                 mentionNames.push(user.mention_name);
@@ -420,11 +426,11 @@ module.exports = function (app, addon) {
         });
     }
 
-    function addUser(room, user, clientId, callback = function (added) {}) {
-        addon.settings.get(room.id, clientId).then(function (data) {
+    function addUser(req, user, callback = function (added) {}) {
+        getData(req, function(data) {
             if (!includesUser(data.pings, user)) {
                 data.pings.push(user);
-                addon.settings.set(room.id, data, clientId);
+                setData(req, data);
                 callback(true);
             } else {
                 callback(false)
@@ -432,12 +438,12 @@ module.exports = function (app, addon) {
         });
     }
 
-    function removeUser(room, user, clientId, callback = function () {}) {
-        addon.settings.get(room.id, clientId).then(function (data) {
+    function removeUser(req, user, callback = function () {}) {
+        getData(req, function(data) {
             var index;
             if (index = includesUser(data.pings, user)) {
                 data.pings.splice(index, 1);
-                addon.settings.set(room.id, data, clientId);
+                setData(req, data);
                 callback(user);
             } else {
                 callback(false)
@@ -459,11 +465,10 @@ module.exports = function (app, addon) {
         hipchat.sendMessage(req.clientInfo, req.identity.roomId, message, ops);
     }
 
-    function checkServer(req, callback = function (status, text) {}) {
+    function checkServer(callback = function (status, text) {}) {
         url = 'http://cmmcd.com/PokemonGo/';
         request(url, function (error, response, text) {
             if (!error) {
-                console.log("in check server");
                 var $ = cheerio.load(text);
                 var status;
                 $('.jumbotron table tr td h2').filter(function () {
@@ -472,7 +477,7 @@ module.exports = function (app, addon) {
 
                     status = data.children().first().text();
 
-                    console.log(text);
+                    console.log("check server: " + text);
                     callback(status, text);
                 });
             }
@@ -488,13 +493,13 @@ module.exports = function (app, addon) {
         intervals[clientId] = intervals[clientId] || {};
         intervals[clientId][roomId] = intervals[clientId][roomId] || false;
         addon.settings.get(roomId, clientId).then(function (data) {
-            data = {pings: []};
+            data = {version: VERSION, pings: []};
             addon.settings.set(roomId, data, clientId);
         });
         hipchat.sendMessage(clientInfo, req.body.roomId, 'The ' + addon.descriptor.name + ' add-on has been installed in this room').then(function (data) {
             hipchat.sendMessage(clientInfo, req.body.roomId, "use /help to find out what I do");
         });
-        checkServer({clientInfo: clientInfo}, function (status, text) {
+        checkServer(function (status, text) {
             lastStatus = status;
         });
     });

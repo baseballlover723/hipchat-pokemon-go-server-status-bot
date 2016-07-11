@@ -59,7 +59,7 @@
       },
       {
         "url": "{{localBaseUrl}}/help",
-        "pattern": "^/help",
+        "pattern": "^/(h$|help$)",
         "event": "room_message",
         "name": "Hello!",
         "authentication": "jwt"
@@ -74,6 +74,13 @@
       {
         "url": "{{localBaseUrl}}/stop",
         "pattern": "^/stop",
+        "event": "room_message",
+        "name": "Hello!",
+        "authentication": "jwt"
+      },
+      {
+        "url": "{{localBaseUrl}}/version",
+        "pattern": "^/(v$)|(version$)",
         "event": "room_message",
         "name": "Hello!",
         "authentication": "jwt"
