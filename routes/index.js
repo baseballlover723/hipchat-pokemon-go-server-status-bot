@@ -14,6 +14,7 @@ var statuses = new CircularBuffer(3);
 var intervals = {};
 var REFRESH_RATE = 10 * 1000; // 10 seconds
 var VERSION = "5.0.0";
+var USE_CROWD = false;
 
 // This is the heart of your HipChat Connect add-on. For more information,
 // take a look at https://developer.atlassian.com/hipchat/tutorials/getting-started-with-atlassian-connect-express-node-js
@@ -548,23 +549,47 @@ module.exports = function (app, addon) {
     }
 
     function checkServer(req, callback = function (status, text) {}) {
-        url = 'http://cmmcd.com/PokemonGo/';
-        request(url, function (error, response, text) {
-            if (!error) {
-                var $ = cheerio.load(text);
-                var status;
-                $('.jumbotron table tr td h2').filter(function () {
-                    var data = $(this);
-                    text = data.text();
+        if (USE_CROWD) {
+            var url = 'http://cmmcd.com/PokemonGo/';
+            request(url, function (error, response, text) {
+                if (!error) {
+                    var $ = cheerio.load(text);
+                    $('.jumbotron table tr td h2').filter(function () {
+                        var data = $(this);
+                        var text = data.text();
+                        var status = data.children().first().text();
 
-                    status = data.children().first().text();
+                        console.log("check crowd server: " + text);
+                        updateGlance(req, status, text);
+                        callback(status, text);
+                    });
+                }
+            });
+        } else {
+            var url = 'http://www.mmoserverstatus.com/pokemon_go';
+            request(url, function (error, response, text) {
+                if (!error) {
+                    var $ = cheerio.load(text);
+                    $('.counter ul').filter(function () {
+                        var data = $(this);
+                        var i = data.children().last().children().first().children().first();
+                        var status = "";
+                        var text = "";
+                        if (i.hasClass('fa fa-check green')) {
+                            status = "Online!";
+                            text = 'Pokémon Go Server Status: Online!'
+                        } else {
+                            status = "Offline!";
+                            text = 'Pokémon Go Server Status: Offline! (or very unstable)'
+                        }
 
-                    console.log("check server: " + text);
-                    updateGlance(req, status, text);
-                    callback(status, text);
-                });
-            }
-        });
+                        console.log("check non crowd server: " + text);
+                        updateGlance(req, status, text);
+                        callback(status, text);
+                    });
+                }
+            });
+        }
     }
 
     function getData(req, callback = function (data) {}) {
