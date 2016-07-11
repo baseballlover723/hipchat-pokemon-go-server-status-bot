@@ -1,4 +1,4 @@
-This is a hipchat bot that lets you know if the pokemon go servers are up. It scrapes from ""
+This is a hipchat bot that lets you know if the pokemon go servers are up. It scrapes from "http://cmmcd.com/PokemonGo/"
 How to install:
   1. goto "https://hipchat.com/addons/"
   2. scroll to the bottom and click on "Install an integration from a descriptor URL"
