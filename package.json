@@ -9,6 +9,7 @@
     "node": "6.2.1"
   },
   "dependencies": {
+    "async": "^2.0.0",
     "atlassian-connect-express": "^1.0.10",
     "atlassian-connect-express-hipchat": "^0.3.5",
     "atlassian-connect-express-redis": "^0.1.6",

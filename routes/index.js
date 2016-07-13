@@ -12,7 +12,7 @@ if (env == 'dev') {
     client = redis.createClient(process.env.REDIS_URL);
 }
 
-client.on('connect', function() {
+client.on('connect', function () {
     console.log("connected to redis");
 });
 
@@ -21,12 +21,13 @@ var request = require('request');
 var cheerio = require('cheerio');
 var CircularBuffer = require("circular-buffer");
 var parseDuration = require('parse-duration');
+var async = require("async");
 
 var lastStatus;
 var statuses = new CircularBuffer(3);
-var intervals = {};
+var interval;
 var REFRESH_RATE = 10 * 1000; // 10 seconds
-var VERSION = "6.0.0";
+var VERSION = "7.0.0";
 var USE_CROWD = false;
 var MY_ID = process.env.MY_ID;
 
@@ -85,7 +86,6 @@ module.exports = function (app, addon) {
         cors(),
         addon.authenticate(),
         function (req, res) {
-            console.log("/glance");
             url = 'http://cmmcd.com/PokemonGo/';
             request(url, function (error, response, text) {
                 if (!error) {
@@ -135,7 +135,7 @@ module.exports = function (app, addon) {
         }
         var clientId = req.body.oauth_client_id;
         var roomId = req.body.item.room.id;
-        hipchat.sendGlance(clientId, roomId,"serverStatus.glance", {
+        hipchat.sendGlance(clientId, roomId, "serverStatus.glance", {
             "label": {
                 "type": "html",
                 "value": "PoGo Server Is "
@@ -147,6 +147,35 @@ module.exports = function (app, addon) {
                     "type": type
                 }
             }
+        });
+    }
+
+    function updateGlances(status, text) {
+        console.log("update all glances to " + status);
+        var type;
+        if (status.includes("Online")) {
+            type = "success";
+        } else if (status.includes("Unstable")) {
+            type = "current";
+        } else {
+            type = "error";
+        }
+        getActiveRooms(function (rooms) {
+            rooms.forEach(function (room) {
+                hipchat.sendGlance(room.clientInfo, room.id, "serverStatus.glance", {
+                    "label": {
+                        "type": "html",
+                        "value": "PoGo Server Is "
+                    },
+                    "status": {
+                        "type": "lozenge",
+                        "value": {
+                            "label": status,
+                            "type": type
+                        }
+                    }
+                });
+            });
         });
     }
 
@@ -162,6 +191,7 @@ module.exports = function (app, addon) {
             console.log(req.body.item.message.message);
             //client.del("rooms", function(err, reply) {});
 
+            // client.del("listening", function(err, reply) {});
             hipchat.sendMessage(req.clientInfo, req.identity.roomId, 'pong pong')
                 .then(function (data) {
                     res.sendStatus(200);
@@ -191,7 +221,7 @@ module.exports = function (app, addon) {
         addon.authenticate(),
         function (req, res) {
             checkServer(req, function (status, text) {
-                sendMessage(req, text);
+                sendMessageToAll(text);
                 lastStatus = status;
                 statuses.enq(status);
                 res.sendStatus(200);
@@ -252,10 +282,13 @@ module.exports = function (app, addon) {
     app.post('/start',
         addon.authenticate(),
         function (req, res) {
-            getInterval(req, function (interval) {
-                if (!interval) {
-                    startInterval(req);
+            if (!interval) {
+                startInterval();
+            }
+            startRoomListening(req, function (added) {
+                if (added) {
                     sendMessage(req, "I'll let you know if the server status changes");
+                    checkServer(req);
                 } else {
                     sendMessage(req, "I'm already listening for server changes");
                 }
@@ -267,15 +300,41 @@ module.exports = function (app, addon) {
     app.post('/stop',
         addon.authenticate(),
         function (req, res) {
-            getInterval(req, function (interval) {
-                if (interval) {
-                    removeInterval(req, interval);
+            stopRoomListening(req, function (removed) {
+                if (removed) {
                     sendMessage(req, "I'm not listening for server changes anymore");
+                    noActiveRooms(req, function (noActiveRooms) {
+                        if (noActiveRooms) {
+                            clearInterval(interval);
+                            interval = false;
+                        }
+                    });
                 } else {
                     sendMessage(req, "I'm not listening for server changes");
                 }
                 res.sendStatus(200);
             });
+        }
+    );
+
+    app.post('/active',
+        addon.authenticate(),
+        function (req, res) {
+            if (MY_ID == req.body.item.message.from.id) {
+                getActiveRooms(function (rooms) {
+                    if (rooms.length > 0) {
+                        var roomNames = [];
+                        rooms.map(function (room) { roomNames.push(room.name)});
+                        sendMessage(req, "active rooms: " + rooms.length + "<br/>" + roomNames.join(", "));
+                    } else {
+                        sendMessage(req, "No active rooms");
+                    }
+                    res.sendStatus(200);
+                });
+            } else {
+                console.log("you cant use active, id must be: " + MY_ID + ", yours is " + req.body.item.message.from.id);
+                res.sendStatus(200);
+            }
         }
     );
 
@@ -320,10 +379,9 @@ module.exports = function (app, addon) {
     app.post('/rooms',
         addon.authenticate(),
         function (req, res) {
-            console.log(addon.settings.client);
             if (MY_ID == req.body.item.message.from.id) {
-                getInstalledRooms(req, function (roomNames) {
-                    //var roomNames = rooms.map(function(room) {return room.name});
+                getInstalledRooms(function (rooms) {
+                    var roomNames = rooms.map(function (room) {return room.name});
                     sendMessage(req, "number of rooms: " + roomNames.length + "<br/>" + roomNames);
                     res.sendStatus(200);
                 });
@@ -333,9 +391,68 @@ module.exports = function (app, addon) {
         }
     );
 
-    function getInstalledRooms(req, callback = function(rooms) {}) {
-        client.smembers('rooms', function(err, rooms) {
-            callback(rooms);
+
+    function startRoomListening(req, callback = function (added) {}) {
+        var room = req.body.item.room;
+        var clientId = req.body.oauth_client_id;
+        isRoomListening(req, function (listening) {
+            if (!listening) {
+                client.sadd(["listening", room.id], function (err, reply) {
+                    client.hmset([room.id, "id", room.id, "clientInfoJson", JSON.stringify(req.clientInfo), "name", room.name], function (err, reply) {
+                        console.log("room: " + room.name + " has started listening");
+                        callback(true);
+                    });
+                });
+            } else {
+                callback(false);
+            }
+        });
+    }
+
+    function isRoomListening(req, callback = function (listening) {}) {
+        var room = req.body.item.room;
+        client.sismember(["listening", room.id], function (err, reply) {
+            callback(reply == 1);
+        });
+    }
+
+    function stopRoomListening(req, callback = function (removed) {}) {
+        var room = req.body.item.room;
+        isRoomListening(req, function (listening) {
+            if (listening) {
+                client.srem(["listening", room.id], function (err, reply) {
+                    client.del(room.id);
+                    console.log("room: " + room.name + " has stopped listening");
+                    callback(true);
+                });
+            } else {
+                callback(false);
+            }
+        });
+    }
+
+    function getActiveRooms(callback = function (rooms) {}) {
+        var rooms = [];
+        client.smembers("listening", function (err, reply) {
+            async.each(reply, function (roomId, cb) {
+                client.hgetall(roomId, function (err, room) {
+                    room.clientInfo = JSON.parse(room.clientInfoJson);
+                    rooms.push(room);
+                    cb();
+                });
+            }, function (err) {
+                if (err) {
+                    console.log("error in get active rooms");
+                    console.log(err);
+                }
+                callback(rooms);
+            });
+        });
+    }
+
+    function noActiveRooms(req, callback = function (noActiveRooms) {}) {
+        client.scard("listening", function (err, reply) {
+            callback(reply == 0);
         });
     }
 
@@ -351,74 +468,42 @@ module.exports = function (app, addon) {
         return installedMajor < major;
     }
 
-    function startInterval(req) {
-        var room = req.body.item.room;
-        console.log("starting interval for room " + room.name);
+    function startInterval() {
         clearStatuses();
-        var first = true;
+        console.log("starting interval");
         interval = setInterval(function () {
-            checkServer(req, function (status, text) {
-                if (first) {
-                    getMentionsString(req, function (pings) {
-                        lastStatus = status;
-                        sendMessage(req, text + pings, {options: {notify: true, format: "text"}});
-                    });
-                    first = false;
-                } else if (status.includes("Offline") || status.includes("Unstable")) {
+            checkServer(false, function (status, text) {
+                if (status.includes("Offline") || status.includes("Unstable")) {
                     if (status.includes("Unstable") && !seenStatusRecently("Unstable")) {
-                        getMentionsString(req, function (pings) {
-                            lastStatus = status;
-                            sendMessage(req, text + pings, {options: {notify: true, format: "text"}});
-                        });
+                        lastStatus = status;
+                        sendMessageToAll(text, {options: {notify: true, format: "text", pings: true}});
                     } else if (status.includes("Offline")) {
                         if (allStatusRecently("Offline") && !lastStatus.includes("Offline")) {
-                            getMentionsString(req, function (pings) {
-                                lastStatus = status;
-                                sendMessage(req, text + pings, {options: {notify: true, format: "text"}});
-                            });
+                            lastStatus = status;
+                            sendMessageToAll(text, {options: {notify: true, format: "text", pings: true}});
                         }
                         if (!seenStatusRecently("Offline") && !lastStatus.includes("Unstable")) {
-                            getMentionsString(req, function (pings) {
-                                lastStatus = "Unstable";
-                                sendMessage(req, text.replace("Offline", "Unstable") + pings, {options: {notify: true, format: "text"}});
+                            lastStatus = "Unstable";
+                            sendMessageToAll(text.replace("Offline", "Unstable") + pings, {
+                                options: {
+                                    notify: true,
+                                    format: "text",
+                                    pings: true
+                                }
                             });
                         }
                     }
                 } else if (status.includes("Online")) {
-                    if (!allStatusRecently("Online")) {
+                    if (!allStatusRecently("Online") && statuses.size() > 0) {
                         clearStatuses();
-                        getMentionsString(req, function (pings) {
-                            lastStatus = status;
-                            sendMessage(req, text + pings, {options: {notify: true, format: "text"}});
-                        });
+                        lastStatus = status;
+                        sendMessageToAll(text, {options: {notify: true, format: "text", pings: true}});
                     }
                 }
                 statuses.enq(status);
             });
         }, REFRESH_RATE);
-        storeInterval(req, interval);
-    }
-
-    function storeInterval(req, interval) {
-        var clientId = req.body.oauth_client_id;
-        var roomId = req.body.item.room.id;
-        intervals[clientId] = intervals[clientId] || {};
-        intervals[clientId][roomId] = interval;
-        clearStatuses();
-    }
-
-    function removeInterval(req, interval) {
-        var clientId = req.body.oauth_client_id;
-        var room = req.body.item.room;
-        clearInterval(interval);
-        console.log("stopping interval for room " + room.name);
-        intervals[clientId][room.id] = false;
-    }
-
-    function getInterval(req, callback = function (interval) {}) {
-        var clientId = req.body.oauth_client_id;
-        var roomId = req.body.item.room.id;
-        callback(intervals[clientId] && intervals[clientId][roomId]);
+        // storeInterval(req, interval);
     }
 
     function clearStatuses() {
@@ -584,7 +669,6 @@ module.exports = function (app, addon) {
 
     function sendMessage(req, message, ops = {}) {
         checkVersion(req, function (installedVersion, needUpgrade) {
-            console.log("here");
             if (needUpgrade) {
                 hipchat.sendMessage(req.clientInfo, req.identity.roomId, "You need to upgrade this plugin by uninstalling and reinstalling the plugin here: https://marketplace.atlassian.com/plugins/pokemon-go-server-status-bot/cloud/overview", {options: {format: "text"}});
             }
@@ -592,7 +676,27 @@ module.exports = function (app, addon) {
         });
     }
 
-    function checkServer(req, callback = function (status, text) {}) {
+    function sendMessageToAll(message, ops = {options: {}}) {
+        console.log("sending message to all listening rooms");
+        getActiveRooms(function (rooms) {
+            rooms.forEach(function (room) {
+                if (ops.options.pings) {
+                    getMentionsString({
+                        body: {
+                            oauth_client_id: room.clientInfo.clientKey,
+                            item: {room: room}
+                        }
+                    }, function (pings) {
+                        hipchat.sendMessage(room.clientInfo, room.id, message + pings, ops);
+                    });
+                } else {
+                    hipchat.sendMessage(room.clientInfo, room.id, message, ops);
+                }
+            });
+        });
+    }
+
+    function checkServer(req = false, callback = function (status, text) {}) {
         if (USE_CROWD) {
             var url = 'http://cmmcd.com/PokemonGo/';
             request(url, function (error, response, text) {
@@ -604,7 +708,11 @@ module.exports = function (app, addon) {
                         var status = data.children().first().text();
 
                         console.log("check crowd server: " + text);
-                        updateGlance(req, status, text);
+                        if (req) {
+                            updateGlance(req, status, text);
+                        } else {
+                            updateGlances(status, text);
+                        }
                         callback(status, text);
                     });
                 }
@@ -628,7 +736,11 @@ module.exports = function (app, addon) {
                         }
 
                         console.log("check non crowd server: " + text);
-                        updateGlance(req, status, text);
+                        if (req) {
+                            updateGlance(req, status, text);
+                        } else {
+                            updateGlances(status, text);
+                        }
                         callback(status, text);
                     });
                 }
@@ -656,15 +768,15 @@ module.exports = function (app, addon) {
     addon.on('installed', function (clientKey, clientInfo, req) {
         var clientId = req.body.oauthId;
         var roomId = req.body.roomId;
-        intervals[clientId] = intervals[clientId] || {};
-        intervals[clientId][roomId] = intervals[clientId][roomId] || false;
+        // intervals[clientId] = intervals[clientId] || {};
+        // intervals[clientId][roomId] = intervals[clientId][roomId] || false;
         addon.settings.get(roomId, clientId).then(function (data) {
             data = {version: VERSION, pings: [], muted: []};
             addon.settings.set(roomId, data, clientId);
         });
-        hipchat.getRoom(clientInfo, roomId).then(function(res) {
+        hipchat.getRoom(clientInfo, roomId).then(function (res) {
             if (res.statusCode == 200) {
-                addRoom(res.body);
+                addInstalledRoom(clientId, res.body);
             }
             hipchat.sendMessage(clientInfo, roomId, 'The ' + addon.descriptor.name + ' add-on has been installed in this room').then(function (data) {
                 hipchat.sendMessage(clientInfo, roomId, "use /help to find out what I do");
@@ -677,7 +789,6 @@ module.exports = function (app, addon) {
 
 // Clean up clients when uninstalled
     addon.on('uninstalled', function (id) {
-        // #TODO remove room from list of rooms
         addon.settings.client.keys(id + ':*', function (err, rep) {
             rep.forEach(function (k) {
                 addon.logger.info('Removing key:', k);
@@ -685,15 +796,42 @@ module.exports = function (app, addon) {
             });
         });
     });
+
+    getActiveRooms(function (rooms) {
+        if (rooms.length > 0) {
+            startInterval();
+        }
+    });
+
 };
 
-function addRoom(room) {
-    client.sadd(["rooms", room.name], function(err, reply) {
+function addInstalledRoom(clientId, room) {
+    client.sadd(["installedRoomIds", room.id], function (err, reply) {
         if (err) {
+            console.log("error in add installed room");
             console.log(err);
         } else {
-            console.log(reply);
+            client.hmset(["installed" + room.id, "id", room.id, "clientId", clientId, "name", room.name], function (err, reply) {});
+            console.log("installed room: " + room.name + " id: " + room.id);
         }
+    });
+}
+
+function getInstalledRooms(callback = function (rooms) {}) {
+    var rooms = [];
+    client.smembers("installedRoomIds", function (err, reply) {
+        async.each(reply, function (roomId, cb) {
+            client.hgetall("installed" + roomId, function (err, room) {
+                rooms.push(room);
+                cb();
+            });
+        }, function (err) {
+            if (err) {
+                console.log("error in get installed rooms");
+                console.log(err);
+            }
+            callback(rooms);
+        });
     });
 }
 

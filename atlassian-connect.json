@@ -78,6 +78,13 @@
         "authentication": "jwt"
       },
       {
+        "url": "{{localBaseUrl}}/active",
+        "pattern": "^/active",
+        "event": "room_message",
+        "name": "Hello!",
+        "authentication": "jwt"
+      },
+      {
         "url": "{{localBaseUrl}}/version",
         "pattern": "^/(v$)|(version$)",
         "event": "room_message",
