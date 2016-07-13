@@ -27,7 +27,7 @@ var lastStatus;
 var statuses = new CircularBuffer(3);
 var interval;
 var REFRESH_RATE = 10 * 1000; // 10 seconds
-var VERSION = "7.0.3";
+var VERSION = "7.0.4";
 var USE_CROWD = false;
 var MY_ID = process.env.MY_ID;
 
@@ -221,7 +221,7 @@ module.exports = function (app, addon) {
         addon.authenticate(),
         function (req, res) {
             checkServer(req, function (status, text) {
-                sendMessageToAll(text);
+                sendMessage(req, text);
                 lastStatus = status;
                 statuses.enq(status);
                 res.sendStatus(200);
