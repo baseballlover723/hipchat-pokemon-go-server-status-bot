@@ -3,6 +3,19 @@ var cors = require('cors');
 var uuid = require('uuid');
 var url = require('url');
 
+var redis = require('redis');
+var client;
+var env = process.env.NODE_ENV || 'dev';
+if (env == 'dev') {
+    client = redis.createClient();
+} else {
+    client = redis.createClient(process.env.REDIS_URL);
+}
+
+client.on('connect', function() {
+    console.log("connected to redis");
+});
+
 var fs = require('fs');
 var request = require('request');
 var cheerio = require('cheerio');
@@ -13,8 +26,9 @@ var lastStatus;
 var statuses = new CircularBuffer(3);
 var intervals = {};
 var REFRESH_RATE = 10 * 1000; // 10 seconds
-var VERSION = "5.0.0";
+var VERSION = "6.0.0";
 var USE_CROWD = false;
+var MY_ID = process.env.MY_ID;
 
 // This is the heart of your HipChat Connect add-on. For more information,
 // take a look at https://developer.atlassian.com/hipchat/tutorials/getting-started-with-atlassian-connect-express-node-js
@@ -144,8 +158,10 @@ module.exports = function (app, addon) {
             // console.log(req.body);
             var clientId = req.body.oauth_client_id;
             var room = req.body.item.room;
-            addon.settings.set(room.id, {version: VERSION, pings: [], muted: []}, clientId);
+            //addon.settings.set(room.id, {version: VERSION, pings: [], muted: []}, clientId);
             console.log(req.body.item.message.message);
+            //client.del("rooms", function(err, reply) {});
+
             hipchat.sendMessage(req.clientInfo, req.identity.roomId, 'pong pong')
                 .then(function (data) {
                     res.sendStatus(200);
@@ -301,6 +317,28 @@ module.exports = function (app, addon) {
         }
     );
 
+    app.post('/rooms',
+        addon.authenticate(),
+        function (req, res) {
+            console.log(addon.settings.client);
+            if (MY_ID == req.body.item.message.from.id) {
+                getInstalledRooms(req, function (roomNames) {
+                    //var roomNames = rooms.map(function(room) {return room.name});
+                    sendMessage(req, "number of rooms: " + roomNames.length + "<br/>" + roomNames);
+                    res.sendStatus(200);
+                });
+            } else {
+                res.sendStatus(200);
+            }
+        }
+    );
+
+    function getInstalledRooms(req, callback = function(rooms) {}) {
+        client.smembers('rooms', function(err, rooms) {
+            callback(rooms);
+        });
+    }
+
     function checkVersion(req, callback = function (installedVersion, needUpgrade) {}) {
         getData(req, function (data) {
             callback(data.version, needUpgrade(data.version));
@@ -323,26 +361,26 @@ module.exports = function (app, addon) {
                 if (first) {
                     getMentionsString(req, function (pings) {
                         lastStatus = status;
-                        sendMessage(req, text + pings, {options: {notify: true}});
+                        sendMessage(req, text + pings, {options: {notify: true, format: "text"}});
                     });
                     first = false;
                 } else if (status.includes("Offline") || status.includes("Unstable")) {
                     if (status.includes("Unstable") && !seenStatusRecently("Unstable")) {
                         getMentionsString(req, function (pings) {
                             lastStatus = status;
-                            sendMessage(req, text + pings, {options: {notify: true}});
+                            sendMessage(req, text + pings, {options: {notify: true, format: "text"}});
                         });
                     } else if (status.includes("Offline")) {
                         if (allStatusRecently("Offline") && !lastStatus.includes("Offline")) {
                             getMentionsString(req, function (pings) {
                                 lastStatus = status;
-                                sendMessage(req, text + pings, {options: {notify: true}});
+                                sendMessage(req, text + pings, {options: {notify: true, format: "text"}});
                             });
                         }
                         if (!seenStatusRecently("Offline") && !lastStatus.includes("Unstable")) {
                             getMentionsString(req, function (pings) {
                                 lastStatus = "Unstable";
-                                sendMessage(req, text.replace("Offline", "Unstable") + pings, {options: {notify: true}});
+                                sendMessage(req, text.replace("Offline", "Unstable") + pings, {options: {notify: true, format: "text"}});
                             });
                         }
                     }
@@ -351,7 +389,7 @@ module.exports = function (app, addon) {
                         clearStatuses();
                         getMentionsString(req, function (pings) {
                             lastStatus = status;
-                            sendMessage(req, text + pings, {options: {notify: true}});
+                            sendMessage(req, text + pings, {options: {notify: true, format: "text"}});
                         });
                     }
                 }
@@ -545,7 +583,13 @@ module.exports = function (app, addon) {
     }
 
     function sendMessage(req, message, ops = {}) {
-        hipchat.sendMessage(req.clientInfo, req.identity.roomId, message, ops);
+        checkVersion(req, function (installedVersion, needUpgrade) {
+            console.log("here");
+            if (needUpgrade) {
+                hipchat.sendMessage(req.clientInfo, req.identity.roomId, "You need to upgrade this plugin by uninstalling and reinstalling the plugin here: https://marketplace.atlassian.com/plugins/pokemon-go-server-status-bot/cloud/overview", {options: {format: "text"}});
+            }
+            hipchat.sendMessage(req.clientInfo, req.identity.roomId, message, ops);
+        });
     }
 
     function checkServer(req, callback = function (status, text) {}) {
@@ -618,8 +662,13 @@ module.exports = function (app, addon) {
             data = {version: VERSION, pings: [], muted: []};
             addon.settings.set(roomId, data, clientId);
         });
-        hipchat.sendMessage(clientInfo, req.body.roomId, 'The ' + addon.descriptor.name + ' add-on has been installed in this room').then(function (data) {
-            hipchat.sendMessage(clientInfo, req.body.roomId, "use /help to find out what I do");
+        hipchat.getRoom(clientInfo, roomId).then(function(res) {
+            if (res.statusCode == 200) {
+                addRoom(res.body);
+            }
+            hipchat.sendMessage(clientInfo, roomId, 'The ' + addon.descriptor.name + ' add-on has been installed in this room').then(function (data) {
+                hipchat.sendMessage(clientInfo, roomId, "use /help to find out what I do");
+            });
         });
         checkServer({body: {oauth_client_id: clientId, item: {room: {id: roomId}}}}, function (status, text) {
             lastStatus = status;
@@ -628,6 +677,7 @@ module.exports = function (app, addon) {
 
 // Clean up clients when uninstalled
     addon.on('uninstalled', function (id) {
+        // #TODO remove room from list of rooms
         addon.settings.client.keys(id + ':*', function (err, rep) {
             rep.forEach(function (k) {
                 addon.logger.info('Removing key:', k);
@@ -636,6 +686,16 @@ module.exports = function (app, addon) {
         });
     });
 };
+
+function addRoom(room) {
+    client.sadd(["rooms", room.name], function(err, reply) {
+        if (err) {
+            console.log(err);
+        } else {
+            console.log(reply);
+        }
+    });
+}
 
 String.prototype.replaceAll = function (search, replacement) {
     var target = this;

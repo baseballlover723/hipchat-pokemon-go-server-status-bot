@@ -99,6 +99,13 @@
         "authentication": "jwt"
       },
       {
+        "url": "{{localBaseUrl}}/rooms",
+        "pattern": "^\/rooms$",
+        "event": "room_message",
+        "name": "Hello!",
+        "authentication": "jwt"
+      },
+      {
         "url": "{{localBaseUrl}}/webhook",
         "pattern": "^/hello",
         "event": "room_message",
