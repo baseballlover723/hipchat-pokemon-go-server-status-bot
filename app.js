@@ -52,7 +52,9 @@ app.set('views', viewsDir);
 
 // Declare any Express [middleware](http://expressjs.com/api.html#middleware) you'd like to use here
 // Log requests, using an appropriate formatter by env
-app.use(morgan(devEnv ? 'dev' : 'combined'));
+app.use(morgan(devEnv ? 'dev' : 'combined', {
+  skip: function(req, res) {return (req.method == "GET" && req.path == "/glance");}
+}));
 // Include request parsers
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({extended: false}));

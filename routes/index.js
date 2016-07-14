@@ -27,7 +27,7 @@ var lastStatus;
 var statuses = new CircularBuffer(3);
 var interval;
 var REFRESH_RATE = 10 * 1000; // 10 seconds
-var VERSION = "7.1.0";
+var VERSION = "7.1.2";
 var USE_CROWD = false;
 var MY_ID = process.env.MY_ID;
 
