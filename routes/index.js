@@ -27,7 +27,7 @@ var lastStatus;
 var statuses = new CircularBuffer(3);
 var interval;
 var REFRESH_RATE = 10 * 1000; // 10 seconds
-var VERSION = "7.2.0";
+var VERSION = "7.3.0";
 var USE_CROWD = false;
 var MY_ID = process.env.MY_ID;
 
@@ -212,8 +212,9 @@ module.exports = function (app, addon) {
                 "<b>/version</b>, <b>/v</b>: lists the version of the bot in the form 'major.minor.patch'. If the major numbers are different, you need to uninstall and reinstall the bot to get the latest features<br/>" +
                 "<b>/mute</b>: unsubscribes you for the time specified (/mute 20 s, /mute 30 minutes )<br/>" +
                 "<b>/mutes</b>: displays the people who have muted and how much longer they have left<br/>";
-            sendMessage(req, helpString);
-            res.sendStatus(200);
+            sendMessage(req, helpString, {}, function() {
+                res.sendStatus(200);
+            });
         }
     );
 
@@ -221,10 +222,11 @@ module.exports = function (app, addon) {
         addon.authenticate(),
         function (req, res) {
             checkServer(req, function (status, text) {
-                sendMessage(req, text);
                 lastStatus = status;
                 statuses.enq(status);
-                res.sendStatus(200);
+                sendMessage(req, text, {}, function() {
+                    res.sendStatus(200);
+                });
             });
         }
     );
@@ -236,11 +238,14 @@ module.exports = function (app, addon) {
 
             addUser(req, user, function (added) {
                 if (added) {
-                    sendMessage(req, "added " + user.name + " to subscriber list");
+                    sendMessage(req, "added " + user.name + " to subscriber list", {}, function() {
+                        res.sendStatus(200);
+                    });
                 } else {
-                    sendMessage(req, user.name + " is already subscribed");
+                    sendMessage(req, user.name + " is already subscribed", {}, function() {
+                        res.sendStatus(200);
+                    });
                 }
-                res.sendStatus(200);
             });
         }
     );
@@ -252,11 +257,14 @@ module.exports = function (app, addon) {
 
             removeUser(req, user, function (removed) {
                 if (removed) {
-                    sendMessage(req, user.name + " has unsubscribed :(");
+                    sendMessage(req, user.name + " has unsubscribed :(", {}, function() {
+                        res.sendStatus(200);
+                    });
                 } else {
-                    sendMessage(req, user.name + " wasn't subscribed");
+                    sendMessage(req, user.name + " wasn't subscribed", {}, function() {
+                        res.sendStatus(200);
+                    });
                 }
-                res.sendStatus(200);
             });
         }
     );
@@ -270,11 +278,14 @@ module.exports = function (app, addon) {
                     names.forEach(function (name) {
                         message += " " + name;
                     });
-                    sendMessage(req, message);
+                    sendMessage(req, message, {}, function() {
+                        res.sendStatus(200);
+                    });
                 } else {
-                    sendMessage(req, "There are no subscribers :(");
+                    sendMessage(req, "There are no subscribers :(", {}, function() {
+                        res.sendStatus(200);
+                    });
                 }
-                res.sendStatus(200);
             });
         }
     );
@@ -289,12 +300,14 @@ module.exports = function (app, addon) {
                 if (added) {
                     sendMessage(req, "I'll let you know if the server status changes");
                     checkServer(req, function(status, text) {
-                        sendMessage(req, text);
-                        res.sendStatus(200);
+                        sendMessage(req, text, {}, function() {
+                            res.sendStatus(200);
+                        });
                     });
                 } else {
-                    sendMessage(req, "I'm already listening for server changes");
-                    res.sendStatus(200);
+                    sendMessage(req, "I'm already listening for server changes", {}, function() {
+                        res.sendStatus(200);
+                    });
                 }
             });
         }
@@ -305,17 +318,20 @@ module.exports = function (app, addon) {
         function (req, res) {
             stopRoomListening(req, function (removed) {
                 if (removed) {
-                    sendMessage(req, "I'm not listening for server changes anymore");
-                    noActiveRooms(req, function (noActiveRooms) {
-                        if (noActiveRooms) {
-                            clearInterval(interval);
-                            interval = false;
-                        }
+                    sendMessage(req, "I'm not listening for server changes anymore", {}, function() {
+                        res.sendStatus(200);
+                        noActiveRooms(req, function (noActiveRooms) {
+                            if (noActiveRooms) {
+                                clearInterval(interval);
+                                interval = false;
+                            }
+                        });
                     });
                 } else {
-                    sendMessage(req, "I'm not listening for server changes");
+                    sendMessage(req, "I'm not listening for server changes", {}, function() {
+                        res.sendStatus(200);
+                    });
                 }
-                res.sendStatus(200);
             });
         }
     );
@@ -328,11 +344,14 @@ module.exports = function (app, addon) {
                     if (rooms.length > 0) {
                         var roomNames = [];
                         rooms.map(function (room) { roomNames.push(room.name + ": " + room.id)});
-                        sendMessage(req, roomNames.join(" * ") + "<br/>number of active rooms: " + rooms.length);
+                        sendMessage(req, roomNames.join(" * ") + "<br/>number of active rooms: " + rooms.length, {}, function() {
+                            res.sendStatus(200);
+                        });
                     } else {
-                        sendMessage(req, "No active rooms");
+                        sendMessage(req, "No active rooms", {}, function() {
+                            res.sendStatus(200);
+                        });
                     }
-                    res.sendStatus(200);
                 });
             } else {
                 console.log("you cant use active, id must be: " + MY_ID + ", yours is " + req.body.item.message.from.id);
@@ -346,11 +365,14 @@ module.exports = function (app, addon) {
         function (req, res) {
             checkVersion(req, function (installedVersion, needUpgrade) {
                 if (needUpgrade) {
-                    sendMessage(req, installedVersion + " you need to upgrade, latest version is " + VERSION);
+                    sendMessage(req, installedVersion + " you need to upgrade, latest version is " + VERSION, {}, function() {
+                        res.sendStatus(200);
+                    });
                 } else {
-                    sendMessage(req, VERSION + " (up to date)");
+                    sendMessage(req, VERSION + " (up to date)", {}, function() {
+                        res.sendStatus(200);
+                    });
                 }
-                res.sendStatus(200);
             });
         }
     );
@@ -360,11 +382,14 @@ module.exports = function (app, addon) {
         function (req, res) {
             addMute(req, function (user, time) {
                 if (time) {
-                    sendMessage(req, "muted " + user.name + " for " + timeConversion(time));
+                    sendMessage(req, "muted " + user.name + " for " + timeConversion(time), {}, function() {
+                        res.sendStatus(200);
+                    });
                 } else {
-                    sendMessage(req, user.name + " is not getting notifications");
+                    sendMessage(req, user.name + " is not getting notifications", {}, function() {
+                        res.sendStatus(200);
+                    });
                 }
-                res.sendStatus(200);
             });
         }
     );
@@ -373,8 +398,9 @@ module.exports = function (app, addon) {
         addon.authenticate(),
         function (req, res) {
             getMutesString(req, function (mutesString) {
-                sendMessage(req, mutesString);
-                res.sendStatus(200);
+                sendMessage(req, mutesString, {}, function() {
+                    res.sendStatus(200);
+                });
             });
         }
     );
@@ -385,8 +411,9 @@ module.exports = function (app, addon) {
             if (MY_ID == req.body.item.message.from.id) {
                 getInstalledRooms(function (rooms) {
                     var roomNames = rooms.map(function (room) {return room.name + ": " + room.id});
-                    sendMessage(req, roomNames.join(" * ") + "<br/>number of rooms: " + roomNames.length);
-                    res.sendStatus(200);
+                    sendMessage(req, roomNames.join(" * ") + "<br/>number of rooms: " + roomNames.length, {}, function() {
+                        res.sendStatus(200);
+                    });
                 });
             } else {
                 res.sendStatus(200);
@@ -676,12 +703,14 @@ module.exports = function (app, addon) {
         return false;
     }
 
-    function sendMessage(req, message, ops = {}) {
+    function sendMessage(req, message, ops = {}, callback = function() {}) {
         checkVersion(req, function (installedVersion, needUpgrade) {
             if (needUpgrade) {
                 hipchat.sendMessage(req.clientInfo, req.identity.roomId, "You need to upgrade this plugin by uninstalling and reinstalling the plugin here: https://marketplace.atlassian.com/plugins/pokemon-go-server-status-bot/cloud/overview", {options: {format: "text"}});
             }
-            hipchat.sendMessage(req.clientInfo, req.identity.roomId, message, ops);
+            hipchat.sendMessage(req.clientInfo, req.identity.roomId, message, ops).then(function() {
+                callback();
+            });
         });
     }
 
