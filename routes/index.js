@@ -27,7 +27,7 @@ var lastStatus;
 var statuses = new CircularBuffer(3);
 var interval;
 var REFRESH_RATE = 10 * 1000; // 10 seconds
-var VERSION = "7.1.2";
+var VERSION = "7.2.0";
 var USE_CROWD = false;
 var MY_ID = process.env.MY_ID;
 
@@ -327,8 +327,8 @@ module.exports = function (app, addon) {
                 getActiveRooms(function (rooms) {
                     if (rooms.length > 0) {
                         var roomNames = [];
-                        rooms.map(function (room) { roomNames.push(room.id + ": " + room.name)});
-                        sendMessage(req, "active rooms: " + rooms.length + "<br/>" + roomNames.join(", "));
+                        rooms.map(function (room) { roomNames.push(room.name + ": " + room.id)});
+                        sendMessage(req, roomNames.join(" * ") + "<br/>number of active rooms: " + rooms.length);
                     } else {
                         sendMessage(req, "No active rooms");
                     }
@@ -384,8 +384,8 @@ module.exports = function (app, addon) {
         function (req, res) {
             if (MY_ID == req.body.item.message.from.id) {
                 getInstalledRooms(function (rooms) {
-                    var roomNames = rooms.map(function (room) {return room.id + ": " + room.name});
-                    sendMessage(req, "number of rooms: " + roomNames.length + "<br/>" + roomNames);
+                    var roomNames = rooms.map(function (room) {return room.name + ": " + room.id});
+                    sendMessage(req, roomNames.join(" * ") + "<br/>number of rooms: " + roomNames.length);
                     res.sendStatus(200);
                 });
             } else {
