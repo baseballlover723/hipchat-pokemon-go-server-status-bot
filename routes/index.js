@@ -324,7 +324,7 @@ module.exports = function (app, addon) {
                 getActiveRooms(function (rooms) {
                     if (rooms.length > 0) {
                         var roomNames = [];
-                        rooms.map(function (room) { roomNames.push(room.name)});
+                        rooms.map(function (room) { roomNames.push(room.id + ": " + room.name)});
                         sendMessage(req, "active rooms: " + rooms.length + "<br/>" + roomNames.join(", "));
                     } else {
                         sendMessage(req, "No active rooms");
@@ -381,7 +381,7 @@ module.exports = function (app, addon) {
         function (req, res) {
             if (MY_ID == req.body.item.message.from.id) {
                 getInstalledRooms(function (rooms) {
-                    var roomNames = rooms.map(function (room) {return room.name});
+                    var roomNames = rooms.map(function (room) {return room.id + ": " + room.name});
                     sendMessage(req, "number of rooms: " + roomNames.length + "<br/>" + roomNames);
                     res.sendStatus(200);
                 });
