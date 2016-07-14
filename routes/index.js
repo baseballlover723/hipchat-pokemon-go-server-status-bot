@@ -27,7 +27,7 @@ var lastStatus;
 var statuses = new CircularBuffer(3);
 var interval;
 var REFRESH_RATE = 10 * 1000; // 10 seconds
-var VERSION = "7.0.4";
+var VERSION = "7.0.5";
 var USE_CROWD = false;
 var MY_ID = process.env.MY_ID;
 
@@ -488,7 +488,7 @@ module.exports = function (app, addon) {
                         }
                         if (!seenStatusRecently("Offline") && !lastStatus.includes("Unstable")) {
                             lastStatus = "Unstable";
-                            sendMessageToAll(text.replace("Offline", "Unstable") + pings, {
+                            sendMessageToAll(text.replace("Offline", "Unstable"), {
                                 options: {
                                     notify: true,
                                     format: "text",
