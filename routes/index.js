@@ -27,7 +27,7 @@ var lastStatus;
 var statuses = new CircularBuffer(3);
 var interval;
 var REFRESH_RATE = 10 * 1000; // 10 seconds
-var VERSION = "7.0.5";
+var VERSION = "7.1.0";
 var USE_CROWD = false;
 var MY_ID = process.env.MY_ID;
 
@@ -288,11 +288,14 @@ module.exports = function (app, addon) {
             startRoomListening(req, function (added) {
                 if (added) {
                     sendMessage(req, "I'll let you know if the server status changes");
-                    checkServer(req);
+                    checkServer(req, function(status, text) {
+                        sendMessage(req, text);
+                        res.sendStatus(200);
+                    });
                 } else {
                     sendMessage(req, "I'm already listening for server changes");
+                    res.sendStatus(200);
                 }
-                res.sendStatus(200);
             });
         }
     );
@@ -487,14 +490,16 @@ module.exports = function (app, addon) {
                             sendMessageToAll(text, {options: {notify: true, format: "text", pings: true}});
                         }
                         if (!seenStatusRecently("Offline") && !lastStatus.includes("Unstable")) {
-                            lastStatus = "Unstable";
-                            sendMessageToAll(text.replace("Offline", "Unstable"), {
-                                options: {
-                                    notify: true,
-                                    format: "text",
-                                    pings: true
-                                }
-                            });
+                            lastStatus = status;
+                            sendMessageToAll(text, {options: {notify: true, format: "text", pings: true}});
+                            // lastStatus = "Unstable";
+                            // sendMessageToAll(text.replace("Offline", "Unstable"), {
+                            //     options: {
+                            //         notify: true,
+                            //         format: "text",
+                            //         pings: true
+                            //     }
+                            // });
                         }
                     }
                 } else if (status.includes("Online")) {
