@@ -27,7 +27,7 @@ var lastStatus;
 var statuses = new CircularBuffer(3);
 var interval;
 var REFRESH_RATE = 10 * 1000; // 10 seconds
-var VERSION = "7.3.0";
+var VERSION = "7.4.0";
 var USE_CROWD = false;
 var MY_ID = process.env.MY_ID;
 
@@ -202,7 +202,7 @@ module.exports = function (app, addon) {
     app.post('/help',
         addon.authenticate(),
         function (req, res) {
-            helpString = "<b>/server</b>: Checks the server status. It will send a message to the room with the status of the pokemon go server. It will ping people on the subscriber list if the status changes.<br>" +
+            helpString = "<b>/server</b>: Checks the server status.<br>" +
                 "<b>/help</b>, <b>/h</b>: shows you what the commands do<br/>" +
                 "<b>/subs</b>: Displays the ping names of people who will receive notification if the server status changes<br/>" +
                 "<b>/add</b>: adds yourself to the subscriber list<br/>" +
