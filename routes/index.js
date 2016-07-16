@@ -27,7 +27,7 @@ var lastStatus;
 var statuses = new CircularBuffer(3);
 var interval;
 var REFRESH_RATE = 10 * 1000; // 10 seconds
-var VERSION = "7.4.0";
+var VERSION = "7.5.0";
 var USE_CROWD = false;
 var MY_ID = process.env.MY_ID;
 
@@ -764,6 +764,8 @@ module.exports = function (app, addon) {
                         }
                         callback(status, text);
                     });
+                } else {
+                    callback("404", "http://cmmcd.com/PokemonGo/ is not available");
                 }
             });
         } else {
@@ -792,6 +794,8 @@ module.exports = function (app, addon) {
                         }
                         callback(status, text);
                     });
+                } else {
+                    callback("404", "http://www.mmoserverstatus.com/pokemon_go is not avaliable")
                 }
             });
         }
