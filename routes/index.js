@@ -27,7 +27,7 @@ var lastStatus;
 var statuses = new CircularBuffer(3);
 var interval;
 var REFRESH_RATE = 10 * 1000; // 10 seconds
-var VERSION = "7.5.0";
+var VERSION = "7.5.1";
 var USE_CROWD = false;
 var MY_ID = process.env.MY_ID;
 
@@ -736,8 +736,7 @@ module.exports = function (app, addon) {
                                 }
                             });
                         });
-                    }
-                    else {
+                    } else {
                         hipchat.sendMessage(room.clientInfo, room.id, message, ops);
                     }
                 }
@@ -748,7 +747,9 @@ module.exports = function (app, addon) {
     function checkServer(req = false, callback = function (status, text) {}) {
         if (USE_CROWD) {
             var url = 'http://cmmcd.com/PokemonGo/';
+            var start = new Date().getTime();
             request(url, function (error, response, text) {
+                console.log("took " + timeConversion(new Date().getTime() - start) + " to load crowd");
                 if (!error) {
                     var $ = cheerio.load(text);
                     $('.jumbotron table tr td h2').filter(function () {
@@ -770,29 +771,43 @@ module.exports = function (app, addon) {
             });
         } else {
             var url = 'http://www.mmoserverstatus.com/pokemon_go';
+            var start = new Date().getTime();
             request(url, function (error, response, text) {
+                console.log("took " + timeConversion(new Date().getTime() - start) + " to load non-crowd");
                 if (!error) {
                     var $ = cheerio.load(text);
-                    $('.counter ul').filter(function () {
+                    var gameFast = true;
+                    $('.counter ul li').filter(function () {
                         var data = $(this);
-                        var i = data.children().last().children().first().children().first();
-                        var status = "";
-                        var text = "";
-                        if (i.hasClass('fa fa-check green')) {
-                            status = "Online!";
-                            text = 'Pokémon Go Server Status: Online!'
-                        } else {
-                            status = "Offline!";
-                            text = 'Pokémon Go Server Status: Offline! (or very unstable)'
+                        if (data.text().includes("Game Fast")) {
+                            var i = data.children().last();
+                            gameFast = i.hasClass('fa fa-check green');
                         }
+                        if (data.text().includes("United States")) {
+                            var i = data.children().last();
+                            var status = "";
+                            var text = "";
+                            if (i.hasClass('fa fa-check green')) {
+                                if (gameFast) {
+                                    status = "Online!";
+                                    text = 'Pokémon Go Server Status: Online!'
+                                } else {
+                                    status = "Laggy!";
+                                    text = "Pokémon Go Server Status: Online but possibly laggy!"
+                                }
+                            } else {
+                                status = "Offline!";
+                                text = 'Pokémon Go Server Status: Offline! (or very unstable)'
+                            }
 
-                        console.log("check non crowd server: " + text);
-                        if (req) {
-                            updateGlance(req, status, text);
-                        } else {
-                            updateGlances(status, text);
+                            console.log("check non crowd server: " + text);
+                            if (req) {
+                                updateGlance(req, status, text);
+                            } else {
+                                updateGlances(status, text);
+                            }
+                            callback(status, text);
                         }
-                        callback(status, text);
                     });
                 } else {
                     callback("404", "http://www.mmoserverstatus.com/pokemon_go is not avaliable")
