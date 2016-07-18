@@ -27,7 +27,7 @@ var lastStatus;
 var statuses = new CircularBuffer(3);
 var interval;
 var REFRESH_RATE = 10 * 1000; // 10 seconds
-var VERSION = "7.6.1";
+var VERSION = "7.6.2";
 var USE_CROWD = false;
 var MY_ID = process.env.MY_ID;
 
@@ -99,7 +99,7 @@ module.exports = function (app, addon) {
                         var type;
                         if (status.includes("Online")) {
                             type = "success";
-                        } else if (status.includes("Unstable")) {
+                        } else if (status.includes("Unstable") || status.includes("Laggy")) {
                             type = "current";
                         } else {
                             type = "error";
@@ -128,7 +128,7 @@ module.exports = function (app, addon) {
         var type;
         if (status.includes("Online")) {
             type = "success";
-        } else if (status.includes("Unstable")) {
+        } else if (status.includes("Unstable") || status.includes("Laggy")) {
             type = "current";
         } else {
             type = "error";
@@ -155,7 +155,7 @@ module.exports = function (app, addon) {
         var type;
         if (status.includes("Online")) {
             type = "success";
-        } else if (status.includes("Unstable")) {
+        } else if (status.includes("Unstable") || status.includes("Laggy")) {
             type = "current";
         } else {
             type = "error";
@@ -780,12 +780,10 @@ module.exports = function (app, addon) {
                     $('.counter ul li').filter(function () {
                         var data = $(this);
                         if (data.text().includes("Game stable")) {
-                            console.log(data.text());
                             var i = data.children().last().children().last();
                             gameFast = i.hasClass('fa fa-check green');
                         }
                         if (data.text().includes("United States")) {
-                            console.log(data.text());
                             var i = data.children().last().children().last();
                             var status = "";
                             var text = "";
