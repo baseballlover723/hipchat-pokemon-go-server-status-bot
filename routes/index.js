@@ -27,7 +27,7 @@ var lastStatus;
 var statuses = new CircularBuffer(3);
 var interval;
 var REFRESH_RATE = 10 * 1000; // 10 seconds
-var VERSION = "7.7.0";
+var VERSION = "7.8.0";
 var USE_CROWD = false;
 var MY_ID = process.env.MY_ID;
 
@@ -202,7 +202,8 @@ module.exports = function (app, addon) {
     app.post('/help',
         addon.authenticate(),
         function (req, res) {
-            helpString = "<b>/server</b>: Checks the server status.<br>" +
+            helpString = "If you are not getting updates and you are supposed to, try '/stop' and then '/start'. The bot may of not stored your room right.<br/>" +
+                "<b>/server</b>: Checks the server status.<br>" +
                 "<b>/help</b>, <b>/h</b>: shows you what the commands do<br/>" +
                 "<b>/subs</b>: Displays the ping names of people who will receive notification if the server status changes<br/>" +
                 "<b>/add</b>: adds yourself to the subscriber list<br/>" +
@@ -212,7 +213,7 @@ module.exports = function (app, addon) {
                 "<b>/version</b>, <b>/v</b>: lists the version of the bot in the form 'major.minor.patch'. If the major numbers are different, you need to uninstall and reinstall the bot to get the latest features<br/>" +
                 "<b>/mute</b>: unsubscribes you for the time specified (/mute 20 s, /mute 30 minutes )<br/>" +
                 "<b>/mutes</b>: displays the people who have muted and how much longer they have left<br/>";
-            sendMessage(req, helpString, {}, function() {
+            sendMessage(req, helpString, {}, function () {
                 res.sendStatus(200);
             });
         }
@@ -224,7 +225,7 @@ module.exports = function (app, addon) {
             checkServer(req, function (status, text) {
                 lastStatus = status;
                 statuses.enq(status);
-                sendMessage(req, text, {}, function() {
+                sendMessage(req, text, {}, function () {
                     res.sendStatus(200);
                 });
             });
@@ -238,11 +239,11 @@ module.exports = function (app, addon) {
 
             addUser(req, user, function (added) {
                 if (added) {
-                    sendMessage(req, "added " + user.name + " to subscriber list", {}, function() {
+                    sendMessage(req, "added " + user.name + " to subscriber list", {}, function () {
                         res.sendStatus(200);
                     });
                 } else {
-                    sendMessage(req, user.name + " is already subscribed", {}, function() {
+                    sendMessage(req, user.name + " is already subscribed", {}, function () {
                         res.sendStatus(200);
                     });
                 }
@@ -257,11 +258,11 @@ module.exports = function (app, addon) {
 
             removeUser(req, user, function (removed) {
                 if (removed) {
-                    sendMessage(req, user.name + " has unsubscribed :(", {}, function() {
+                    sendMessage(req, user.name + " has unsubscribed :(", {}, function () {
                         res.sendStatus(200);
                     });
                 } else {
-                    sendMessage(req, user.name + " wasn't subscribed", {}, function() {
+                    sendMessage(req, user.name + " wasn't subscribed", {}, function () {
                         res.sendStatus(200);
                     });
                 }
@@ -278,11 +279,11 @@ module.exports = function (app, addon) {
                     names.forEach(function (name) {
                         message += " " + name;
                     });
-                    sendMessage(req, message, {}, function() {
+                    sendMessage(req, message, {}, function () {
                         res.sendStatus(200);
                     });
                 } else {
-                    sendMessage(req, "There are no subscribers :(", {}, function() {
+                    sendMessage(req, "There are no subscribers :(", {}, function () {
                         res.sendStatus(200);
                     });
                 }
@@ -299,13 +300,13 @@ module.exports = function (app, addon) {
             startRoomListening(req, function (added) {
                 if (added) {
                     sendMessage(req, "I'll let you know if the server status changes");
-                    checkServer(req, function(status, text) {
-                        sendMessage(req, text, {}, function() {
+                    checkServer(req, function (status, text) {
+                        sendMessage(req, text, {}, function () {
                             res.sendStatus(200);
                         });
                     });
                 } else {
-                    sendMessage(req, "I'm already listening for server changes", {}, function() {
+                    sendMessage(req, "I'm already listening for server changes", {}, function () {
                         res.sendStatus(200);
                     });
                 }
@@ -318,7 +319,7 @@ module.exports = function (app, addon) {
         function (req, res) {
             stopRoomListening(req, function (removed) {
                 if (removed) {
-                    sendMessage(req, "I'm not listening for server changes anymore", {}, function() {
+                    sendMessage(req, "I'm not listening for server changes anymore", {}, function () {
                         res.sendStatus(200);
                         noActiveRooms(req, function (noActiveRooms) {
                             if (noActiveRooms) {
@@ -328,7 +329,7 @@ module.exports = function (app, addon) {
                         });
                     });
                 } else {
-                    sendMessage(req, "I'm not listening for server changes", {}, function() {
+                    sendMessage(req, "I'm not listening for server changes", {}, function () {
                         res.sendStatus(200);
                     });
                 }
@@ -344,11 +345,11 @@ module.exports = function (app, addon) {
                     if (rooms.length > 0) {
                         var roomNames = [];
                         rooms.map(function (room) { roomNames.push(room.name + ": " + room.id)});
-                        sendMessage(req, roomNames.join(" * ") + "<br/>number of active rooms: " + rooms.length, {}, function() {
+                        sendMessage(req, roomNames.join(" * ") + "<br/>number of active rooms: " + rooms.length, {}, function () {
                             res.sendStatus(200);
                         });
                     } else {
-                        sendMessage(req, "No active rooms", {}, function() {
+                        sendMessage(req, "No active rooms", {}, function () {
                             res.sendStatus(200);
                         });
                     }
@@ -365,11 +366,11 @@ module.exports = function (app, addon) {
         function (req, res) {
             checkVersion(req, function (installedVersion, needUpgrade) {
                 if (needUpgrade) {
-                    sendMessage(req, installedVersion + " you need to upgrade, latest version is " + VERSION, {}, function() {
+                    sendMessage(req, installedVersion + " you need to upgrade, latest version is " + VERSION, {}, function () {
                         res.sendStatus(200);
                     });
                 } else {
-                    sendMessage(req, VERSION + " (up to date)", {}, function() {
+                    sendMessage(req, VERSION + " (up to date)", {}, function () {
                         res.sendStatus(200);
                     });
                 }
@@ -382,11 +383,11 @@ module.exports = function (app, addon) {
         function (req, res) {
             addMute(req, function (user, time) {
                 if (time) {
-                    sendMessage(req, "muted " + user.name + " for " + timeConversion(time), {}, function() {
+                    sendMessage(req, "muted " + user.name + " for " + timeConversion(time), {}, function () {
                         res.sendStatus(200);
                     });
                 } else {
-                    sendMessage(req, user.name + " is not getting notifications", {}, function() {
+                    sendMessage(req, user.name + " is not getting notifications", {}, function () {
                         res.sendStatus(200);
                     });
                 }
@@ -398,7 +399,7 @@ module.exports = function (app, addon) {
         addon.authenticate(),
         function (req, res) {
             getMutesString(req, function (mutesString) {
-                sendMessage(req, mutesString, {}, function() {
+                sendMessage(req, mutesString, {}, function () {
                     res.sendStatus(200);
                 });
             });
@@ -411,7 +412,7 @@ module.exports = function (app, addon) {
             if (MY_ID == req.body.item.message.from.id) {
                 getInstalledRooms(function (rooms) {
                     var roomNames = rooms.map(function (room) {return room.name + ": " + room.id});
-                    sendMessage(req, roomNames.join(" * ") + "<br/>number of rooms: " + roomNames.length, {}, function() {
+                    sendMessage(req, roomNames.join(" * ") + "<br/>number of rooms: " + roomNames.length, {}, function () {
                         res.sendStatus(200);
                     });
                 });
@@ -703,12 +704,12 @@ module.exports = function (app, addon) {
         return false;
     }
 
-    function sendMessage(req, message, ops = {}, callback = function() {}) {
+    function sendMessage(req, message, ops = {}, callback = function () {}) {
         checkVersion(req, function (installedVersion, needUpgrade) {
             if (needUpgrade) {
                 hipchat.sendMessage(req.clientInfo, req.identity.roomId, "You need to upgrade this plugin by uninstalling and reinstalling the plugin here: https://marketplace.atlassian.com/plugins/pokemon-go-server-status-bot/cloud/overview", {options: {format: "text"}});
             }
-            hipchat.sendMessage(req.clientInfo, req.identity.roomId, message, ops).then(function() {
+            hipchat.sendMessage(req.clientInfo, req.identity.roomId, message, ops).then(function () {
                 callback();
             });
         });
@@ -851,7 +852,7 @@ module.exports = function (app, addon) {
         });
         hipchat.getRoom(clientInfo, roomId).then(function (res) {
             if (res.statusCode == 200) {
-                addInstalledRoom(clientId, res.body);
+                addInstalledRoom(clientInfo, clientId, res.body);
             }
             hipchat.sendMessage(clientInfo, roomId, 'The ' + addon.descriptor.name + ' add-on has been installed in this room').then(function (data) {
                 hipchat.sendMessage(clientInfo, roomId, "use /help to find out what I do");
@@ -879,7 +880,7 @@ module.exports = function (app, addon) {
     });
 };
 
-function addInstalledRoom(clientId, room) {
+function addInstalledRoom(clientInfo, clientId, room) {
     client.sadd(["installedRoomIds", room.id], function (err, reply) {
         if (err) {
             console.log("error in add installed room");
@@ -887,7 +888,17 @@ function addInstalledRoom(clientId, room) {
         } else {
             client.hmset(["installed" + room.id, "id", room.id, "clientId", clientId, "name", room.name], function (err, reply) {});
             console.log("installed room: " + room.name + " id: " + room.id);
+            isRoomListening(room, function (listening) {
+                if (listening) {
+                    client.hmset([room.id, "clientInfoJson", JSON.stringify(clientInfo)], function (err, reply) {});
+                }
+            });
         }
+    });
+}
+function isRoomListening(room, callback = function (listening) {}) {
+    client.sismember(["listening", room.id], function (err, reply) {
+        callback(reply == 1);
     });
 }
 
