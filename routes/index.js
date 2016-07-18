@@ -27,7 +27,7 @@ var lastStatus;
 var statuses = new CircularBuffer(3);
 var interval;
 var REFRESH_RATE = 10 * 1000; // 10 seconds
-var VERSION = "7.9.0";
+var VERSION = "7.10.0";
 var USE_CROWD = false;
 var MY_ID = process.env.MY_ID;
 
@@ -880,6 +880,19 @@ module.exports = function (app, addon) {
             startInterval();
         }
     });
+    getInstalledRooms(function(rooms) {
+        for (var room of rooms) {
+            client.hset(["installed" + room.id, "server", "United States"], function(err, reply) {
+                if (err) {
+                    console.log("error updating rooms to us server");
+                    console.log(err);
+                } else {
+                    console.log(reply);
+                }
+            });
+
+        }
+    });
 };
 
 function addInstalledRoom(clientInfo, clientId, room) {
@@ -888,7 +901,7 @@ function addInstalledRoom(clientInfo, clientId, room) {
             console.log("error in add installed room");
             console.log(err);
         } else {
-            client.hmset(["installed" + room.id, "id", room.id, "clientId", clientId, "name", room.name], function (err, reply) {});
+            client.hmset(["installed" + room.id, "id", room.id, "clientId", clientId, "name", room.name, "server", "United States"], function (err, reply) {});
             console.log("installed room: " + room.name + " id: " + room.id);
             isRoomListening(room, function (listening) {
                 if (listening) {
