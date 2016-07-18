@@ -787,9 +787,9 @@ module.exports = function (app, addon) {
                         }
                         if (data.text().includes("United States")) {
                             if (checkGame) {
-                                console.log("checked game first");
+                                // console.log("checked game first");
                             } else {
-                                console.log("didn't check game first");
+                                // console.log("didn't check game first");
                             }
                             var i = data.children().last().children().last();
                             var status = "";
