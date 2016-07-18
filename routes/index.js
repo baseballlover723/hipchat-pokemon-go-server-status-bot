@@ -27,7 +27,7 @@ var lastStatus;
 var statuses = new CircularBuffer(3);
 var interval;
 var REFRESH_RATE = 10 * 1000; // 10 seconds
-var VERSION = "7.8.0";
+var VERSION = "7.9.0";
 var USE_CROWD = false;
 var MY_ID = process.env.MY_ID;
 
@@ -202,8 +202,7 @@ module.exports = function (app, addon) {
     app.post('/help',
         addon.authenticate(),
         function (req, res) {
-            helpString = "If you are not getting updates and you are supposed to, try '/stop' and then '/start'. The bot may of not stored your room right.<br/>" +
-                "<b>/server</b>: Checks the server status.<br>" +
+            helpString = "<b>/server</b>: Checks the server status.<br>" +
                 "<b>/help</b>, <b>/h</b>: shows you what the commands do<br/>" +
                 "<b>/subs</b>: Displays the ping names of people who will receive notification if the server status changes<br/>" +
                 "<b>/add</b>: adds yourself to the subscriber list<br/>" +
@@ -212,7 +211,10 @@ module.exports = function (app, addon) {
                 "<b>/stop</b>: stops listening for server status changes<br/>" +
                 "<b>/version</b>, <b>/v</b>: lists the version of the bot in the form 'major.minor.patch'. If the major numbers are different, you need to uninstall and reinstall the bot to get the latest features<br/>" +
                 "<b>/mute</b>: unsubscribes you for the time specified (/mute 20 s, /mute 30 minutes )<br/>" +
-                "<b>/mutes</b>: displays the people who have muted and how much longer they have left<br/>";
+                "<b>/mutes</b>: displays the people who have muted and how much longer they have left<br/>" +
+                "If you are not getting updates and you are supposed to, try '/stop' and then '/start'. The bot may of not stored your room right.<br/>" +
+                "Source code: <a href='https://github.com/baseballlover723/hipchat-pokemon-go-server-status-bot'>https://github.com/baseballlover723/hipchat-pokemon-go-server-status-bot</a> <br/>" +
+                "Want to contact me, <a href='mailto:pokemongohipchatbot@gmail.com?Subject=Pokemon%20Go%20Hipchat%20Bot'>send me an email</a> at 'pokemongohipchatbot@gmail.com'";
             sendMessage(req, helpString, {}, function () {
                 res.sendStatus(200);
             });
