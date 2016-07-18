@@ -27,7 +27,7 @@ var lastStatus;
 var statuses = new CircularBuffer(3);
 var interval;
 var REFRESH_RATE = 10 * 1000; // 10 seconds
-var VERSION = "7.6.0";
+var VERSION = "7.6.1";
 var USE_CROWD = false;
 var MY_ID = process.env.MY_ID;
 
@@ -779,7 +779,7 @@ module.exports = function (app, addon) {
                     var gameFast = true;
                     $('.counter ul li').filter(function () {
                         var data = $(this);
-                        if (data.text().includes("Game Fast")) {
+                        if (data.text().includes("Game stable")) {
                             console.log(data.text());
                             var i = data.children().last().children().last();
                             gameFast = i.hasClass('fa fa-check green');
@@ -794,8 +794,8 @@ module.exports = function (app, addon) {
                                     status = "Online!";
                                     text = 'Pokémon Go Server Status: Online!'
                                 } else {
-                                    status = "Laggy!";
-                                    text = "Pokémon Go Server Status: Online but possibly laggy!"
+                                    status = "Laggy";
+                                    text = "Pokémon Go Server Status: Online but possibly laggy or unstable!"
                                 }
                             } else {
                                 status = "Offline!";
