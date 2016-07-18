@@ -27,7 +27,7 @@ var lastStatus;
 var statuses = new CircularBuffer(3);
 var interval;
 var REFRESH_RATE = 10 * 1000; // 10 seconds
-var VERSION = "7.6.2";
+var VERSION = "7.7.0";
 var USE_CROWD = false;
 var MY_ID = process.env.MY_ID;
 
@@ -777,13 +777,20 @@ module.exports = function (app, addon) {
                 if (!error) {
                     var $ = cheerio.load(text);
                     var gameFast = true;
+                    var checkGame = false;
                     $('.counter ul li').filter(function () {
                         var data = $(this);
                         if (data.text().includes("Game stable")) {
                             var i = data.children().last().children().last();
                             gameFast = i.hasClass('fa fa-check green');
+                            checkGame = true;
                         }
                         if (data.text().includes("United States")) {
+                            if (checkGame) {
+                                console.log("checked game first");
+                            } else {
+                                console.log("didn't check game first");
+                            }
                             var i = data.children().last().children().last();
                             var status = "";
                             var text = "";
