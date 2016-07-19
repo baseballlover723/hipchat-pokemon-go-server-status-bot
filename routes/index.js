@@ -24,12 +24,21 @@ var parseDuration = require('parse-duration');
 var async = require("async");
 
 var lastStatus;
-var statuses = new CircularBuffer(3);
+var statuses = {};
 var interval;
 var REFRESH_RATE = 10 * 1000; // 10 seconds
-var VERSION = "7.11.0";
+var VERSION = "8.0.0";
 var USE_CROWD = false;
 var MY_ID = process.env.MY_ID;
+var VALID_REGIONS = ["united states", "united kingdom", "germany", "italy", "new zealand", "argentina", "australia", "austria",
+    "belgium", "brazil", "bulgaria", "canada", "chile", "croatia", "czech republic", "denmark", "estonia", "finland", "greece",
+    "hong kong", "hungary", "iceland", "india", "indonesia", "ireland", "japan", "latvia", "lithuania", "netherlands",
+    "norway", "other", "poland", "portugal", "romania", "singapore", "slovakia", "slovenia", "spain", "sweden", "switzerland", "taiwan", "thailand"
+];
+
+function generateQueue() {
+    return new CircularBuffer(3);
+}
 
 // This is the heart of your HipChat Connect add-on. For more information,
 // take a look at https://developer.atlassian.com/hipchat/tutorials/getting-started-with-atlassian-connect-express-node-js
@@ -150,8 +159,8 @@ module.exports = function (app, addon) {
         });
     }
 
-    function updateGlances(status, text) {
-        console.log("update all glances to " + status);
+    function updateGlances(status, text, region = false) {
+        console.log(region + ": update all glances to " + status);
         var type;
         if (status.includes("Online")) {
             type = "success";
@@ -160,7 +169,7 @@ module.exports = function (app, addon) {
         } else {
             type = "error";
         }
-        getActiveRooms(function (rooms) {
+        getActiveRooms(region, function (rooms) {
             rooms.forEach(function (room) {
                 hipchat.sendGlance(room.clientInfo, room.id, "serverStatus.glance", {
                     "label": {
@@ -212,6 +221,9 @@ module.exports = function (app, addon) {
                 "<b>/version</b>, <b>/v</b>: lists the version of the bot in the form 'major.minor.patch'. If the major numbers are different, you need to uninstall and reinstall the bot to get the latest features<br/>" +
                 "<b>/mute</b>: unsubscribes you for the time specified (/mute 20 s, /mute 30 minutes )<br/>" +
                 "<b>/mutes</b>: displays the people who have muted and how much longer they have left<br/>" +
+                "<b>/region</b>: displays your current region that your room is set to<br/>" +
+                "<b>/regions</b>: displays the supported regions<br/>" +
+                "<b>/select</b>: changes your region server to check<br/>" +
                 "If you are not getting updates and you are supposed to, try '/stop' and then '/start'. The bot may of not stored your room right.<br/>" +
                 "Source code: <a href='https://github.com/baseballlover723/hipchat-pokemon-go-server-status-bot'>https://github.com/baseballlover723/hipchat-pokemon-go-server-status-bot</a> <br/>" +
                 "Want to contact me, <a href='mailto:pokemongohipchatbot@gmail.com?Subject=Pokemon%20Go%20Hipchat%20Bot'>send me an email</a> at 'pokemongohipchatbot@gmail.com'";
@@ -308,6 +320,7 @@ module.exports = function (app, addon) {
                     var room = req.body.item.room;
                     getRoomRegion(room, function (region) {
                         checkServer(region, req, function (status, text) {
+                            addStatus(region, status);
                             sendMessage(req, text, {}, function () {
                                 res.sendStatus(200);
                             });
@@ -349,7 +362,7 @@ module.exports = function (app, addon) {
         addon.authenticate(),
         function (req, res) {
             if (MY_ID == req.body.item.message.from.id) {
-                getActiveRooms(function (rooms) {
+                getActiveRooms(false, function (rooms) {
                     if (rooms.length > 0) {
                         var roomNames = [];
                         rooms.map(function (room) { roomNames.push(room.name + ": " + room.id)});
@@ -461,39 +474,51 @@ module.exports = function (app, addon) {
         addon.authenticate(),
         function (req, res) {
             var room = req.body.item.room;
-            client.smembers(["regions"], function (err, reply) {
-                async.each(reply, function (region, cb) {
-                    client.smembers([region], function (err, reply) {
-                        console.log(region + ": " + reply.join(", "));
-                        cb();
-                    })
-                }, function (err) {
-                    if (err) {
-                        console.log("error in regions");
-                        console.log(err);
-                    }
-                });
-            });
-
             getRoomRegion(room, function (region) {
-                sendMessage(req, "your selected region is '" + region + "'", {}, function () {
+                sendMessage(req, "your selected region is '" + region.capitalize() + "'", {}, function () {
                     res.sendStatus(200);
                 });
             });
         }
     );
 
+    app.post('/regions',
+        addon.authenticate(),
+        function (req, res) {
+            var room = req.body.item.room;
+            var regions = getValidRegions();
+            var regionsStr = regions.map(function (r) {return "'" + r + "'";}).join(", ");
+            sendMessage(req, "valid regions are " + regionsStr, {}, function () {
+                res.sendStatus(200);
+            });
+        }
+    );
 
     function startRoomListening(req, callback = function (added) {}) {
         var room = req.body.item.room;
         var clientId = req.body.oauth_client_id;
         isRoomListening(req, function (listening) {
             if (!listening) {
-                getRoomRegion(room, function (server) {
+                var done = false;
+                getRoomRegion(room, function (region) {
                     client.sadd(["listening", room.id], function (err, reply) {
-                        client.hmset([room.id, "id", room.id, "clientInfoJson", JSON.stringify(req.clientInfo), "name", room.name, "region", server], function (err, reply) {
+                        client.hmset([room.id, "id", room.id, "clientInfoJson", JSON.stringify(req.clientInfo), "name", room.name, "region", region], function (err, reply) {
                             console.log("room: " + room.name + " has started listening");
-                            callback(true);
+                            if (done) {
+                                callback(true);
+                            } else {
+                                done = true;
+                            }
+                        });
+                    });
+
+                    client.sadd([region, room.id], function (err, reply) {
+                        client.sadd(["regions", region], function (err, reply) {
+                            if (done) {
+                                callback(true);
+                            } else {
+                                done = true;
+                            }
                         });
                     });
                 });
@@ -514,33 +539,40 @@ module.exports = function (app, addon) {
         var room = req.body.item.room;
         isRoomListening(req, function (listening) {
             if (listening) {
+                var done = false;
                 client.srem(["listening", room.id], function (err, reply) {
                     client.del(room.id);
                     console.log("room: " + room.name + " has stopped listening");
-                    callback(true);
+                    if (done) {
+                        callback(true);
+                    } else {
+                        done = true;
+                    }
+                });
+                getRoomRegion(room, function (region) {
+                    client.srem([region, room.id], function (err, reply) {
+                        client.scard([region], function (err, reply) {
+                            if (reply == 0) {
+                                client.srem(["regions", region], function (err, reply) {
+                                    if (done) {
+                                        callback(true);
+                                    } else {
+                                        done = true;
+                                    }
+                                });
+                            } else {
+                                if (done) {
+                                    callback(true);
+                                } else {
+                                    done = true;
+                                }
+                            }
+                        });
+                    });
                 });
             } else {
                 callback(false);
             }
-        });
-    }
-
-    function getActiveRooms(callback = function (rooms) {}) {
-        var rooms = [];
-        client.smembers("listening", function (err, reply) {
-            async.each(reply, function (roomId, cb) {
-                client.hgetall(roomId, function (err, room) {
-                    room.clientInfo = JSON.parse(room.clientInfoJson);
-                    rooms.push(room);
-                    cb();
-                });
-            }, function (err) {
-                if (err) {
-                    console.log("error in get active rooms");
-                    console.log(err);
-                }
-                callback(rooms);
-            });
         });
     }
 
@@ -565,61 +597,99 @@ module.exports = function (app, addon) {
     function startInterval() {
         clearStatuses();
         console.log("starting interval");
-        lastStatus = "";
+        lastStatus = {};
         interval = setInterval(function () {
             console.log("********************************");
-            // TODO *************************************************************************************************************
-            // make this check for each region
-            // store seperate verions of recent status for each region
-            checkServer(false, function (status, text) {
-                console.log("recent statuses");
-                console.log(statuses.toarray());
-                if (status.includes("Offline") || status.includes("Unstable") || status.includes("Laggy")) {
-                    if ((status.includes("Unstable") && !seenStatusRecently("Unstable")) || (status.includes("Laggy") && !seenStatusRecently("Laggy"))) {
-                        lastStatus = status;
-                        sendMessageToAll(text, {options: {notify: true, format: "text", pings: true}});
-                    } else if (status.includes("Offline")) {
-                        if (allStatusRecently("Offline") && !lastStatus.includes("Offline")) {
-                            lastStatus = status;
-                            sendMessageToAll(text, {options: {notify: true, format: "text", pings: true}});
+            getListeningRegions(function (regions) {
+                console.log("listening regions: [" + regions.map(function (r) {return "'" + r + "'"}).join(", ") + "]");
+                regions.forEach(function (region) {
+                    checkServer(region, false, function (status, text) {
+                        console.log(region + ": recent statuses: [" + getStatuses(region).toarray().map(function (r) {return "'" + r + "'"}).join(", ") + "]");
+                        if (status.includes("Offline") || status.includes("Unstable") || status.includes("Laggy")) {
+                            if ((status.includes("Unstable") && !seenStatusRecently(region, "Unstable")) || (status.includes("Laggy") && !seenStatusRecently(region, "Laggy"))) {
+                                setLastStatus(region, status);
+                                sendMessageToAll(text, region, {options: {notify: true, format: "text", pings: true}});
+                            } else if (status.includes("Offline")) {
+                                if (allStatusRecently(region, "Offline") && !getLastStatus(region).includes("Offline")) {
+                                    setLastStatus(region, status);
+                                    sendMessageToAll(text, region, {
+                                        options: {
+                                            notify: true,
+                                            format: "text",
+                                            pings: true
+                                        }
+                                    });
+                                }
+                                if (!seenStatusRecently(region, "Offline") && !getLastStatus(region).includes("Unstable") && !getLastStatus(region).includes("Laggy")) {
+                                    setLastStatus(region, status);
+                                    sendMessageToAll(text, region, {
+                                        options: {
+                                            notify: true,
+                                            format: "text",
+                                            pings: true
+                                        }
+                                    });
+                                    // lastStatus = "Unstable";
+                                    // sendMessageToAll(text.replace("Offline", "Unstable"), region, {
+                                    //     options: {
+                                    //         notify: true,
+                                    //         format: "text",
+                                    //         pings: true
+                                    //     }
+                                    // });
+                                }
+                            }
+                        } else if (status.includes("Online")) {
+                            if (!allStatusRecently(region, "Online") && getStatuses(region).size() > 0) {
+                                clearStatuses(region);
+                                setLastStatus(region, status);
+                                sendMessageToAll(text, region, {options: {notify: true, format: "text", pings: true}});
+                            }
                         }
-                        if (!seenStatusRecently("Offline") && !lastStatus.includes("Unstable") && !lastStatus.includes("Laggy")) {
-                            lastStatus = status;
-                            sendMessageToAll(text, {options: {notify: true, format: "text", pings: true}});
-                            // lastStatus = "Unstable";
-                            // sendMessageToAll(text.replace("Offline", "Unstable"), {
-                            //     options: {
-                            //         notify: true,
-                            //         format: "text",
-                            //         pings: true
-                            //     }
-                            // });
-                        }
-                    }
-                } else if (status.includes("Online")) {
-                    if (!allStatusRecently("Online") && statuses.size() > 0) {
-                        clearStatuses();
-                        lastStatus = status;
-                        sendMessageToAll(text, {options: {notify: true, format: "text", pings: true}});
-                    }
-                }
-                statuses.enq(status);
+                        addStatus(region, status);
+                    });
+                });
             });
         }, REFRESH_RATE);
         // storeInterval(req, interval);
     }
 
-    function clearStatuses() {
-        while (statuses.size() > 0) {
-            statuses.deq();
+    function getLastStatus(region) {
+        return lastStatus[region] || "";
+    }
+
+    function setLastStatus(region, status) {
+        lastStatus[region] = status;
+    }
+
+    function addStatus(region, status) {
+        getStatuses(region).enq(status);
+    }
+
+    function getStatuses(region) {
+        if (!statuses[region]) {
+            statuses[region] = generateQueue();
+        }
+        return statuses[region];
+    }
+
+    function clearStatuses(region = false) {
+        if (region) {
+            var statusQueue = getStatuses(region);
+            while (statusQueue.size() > 0) {
+                statusQueue.deq();
+            }
+        } else {
+            statuses = {};
         }
     }
 
-    function allStatusRecently(statusString) {
-        if (statuses.size() == 0) {
+    function allStatusRecently(region, statusString) {
+        var statusQueue = getStatuses(region);
+        if (statusQueue.size() == 0) {
             return false
         }
-        var arr = statuses.toarray();
+        var arr = statusQueue.toarray();
         for (var i in arr) {
             var status = arr[i];
             if (!status.includes(statusString)) {
@@ -629,8 +699,9 @@ module.exports = function (app, addon) {
         return true;
     }
 
-    function seenStatusRecently(statusString) {
-        var arr = statuses.toarray();
+    function seenStatusRecently(region, statusString) {
+        var statusQueue = getStatuses(region);
+        var arr = statusQueue.toarray();
         for (var i in arr) {
             var status = arr[i];
             if (status.includes(statusString)) {
@@ -781,10 +852,10 @@ module.exports = function (app, addon) {
         });
     }
 
-    function sendMessageToAll(message, ops = {options: {}}) {
-        console.log("sending message to all listening rooms");
+    function sendMessageToAll(message, region = false, ops = {options: {}}) {
+        console.log(region + ": sending message to all listening rooms in region");
 
-        getActiveRooms(function (rooms) {
+        getActiveRooms(region, function (rooms) {
             rooms.forEach(function (room) {
                     if (ops.options.pings) {
                         getMentionsString({
@@ -805,6 +876,14 @@ module.exports = function (app, addon) {
                         });
                     } else {
                         hipchat.sendMessage(room.clientInfo, room.id, message, ops);
+                        checkVersion({
+                            body: {oauth_client_id: room.clientInfo.clientKey, item: {room: room}},
+                            function(installedVersion, needUpgrade) {
+                                if (needUpgrade) {
+                                    hipchat.sendMessage(room.clientInfo, room.id, "You need to upgrade this plugin by uninstalling and reinstalling the plugin here: https://marketplace.atlassian.com/plugins/pokemon-go-server-status-bot/cloud/overview", {options: {format: "text"}});
+                                }
+                            }
+                        });
                     }
                 }
             );
@@ -816,7 +895,7 @@ module.exports = function (app, addon) {
             var url = 'http://cmmcd.com/PokemonGo/';
             var start = new Date().getTime();
             request(url, function (error, response, text) {
-                console.log("took " + timeConversion(new Date().getTime() - start) + " to load crowd");
+                console.log(region + ": took " + timeConversion(new Date().getTime() - start) + " to load crowd");
                 if (!error) {
                     var $ = cheerio.load(text);
                     $('.jumbotron table tr td h2').filter(function () {
@@ -824,11 +903,11 @@ module.exports = function (app, addon) {
                         var text = data.text();
                         var status = data.children().first().text();
 
-                        console.log("check crowd server: " + text);
+                        console.log(region + ": check crowd server: " + text);
                         if (req) {
                             updateGlance(req, status, text);
                         } else {
-                            updateGlances(status, text);
+                            updateGlances(status, text, region);
                         }
                         callback(status, text);
                     });
@@ -837,11 +916,10 @@ module.exports = function (app, addon) {
                 }
             });
         } else {
-            console.log("checking " + region);
             var url = 'http://www.mmoserverstatus.com/pokemon_go';
             var start = new Date().getTime();
             request(url, function (error, response, text) {
-                console.log("took " + timeConversion(new Date().getTime() - start) + " to load non-crowd");
+                console.log(region + ": took " + timeConversion(new Date().getTime() - start) + " to load non-crowd");
                 if (!error) {
                     var $ = cheerio.load(text);
                     var gameFast = true;
@@ -853,7 +931,7 @@ module.exports = function (app, addon) {
                             gameFast = i.hasClass('fa fa-check green');
                             checkGame = true;
                         }
-                        if (data.text().includes("United States")) {
+                        if (data.text().toLowerCase().includes(region)) {
                             if (checkGame) {
                                 // console.log("checked game first");
                             } else {
@@ -874,14 +952,13 @@ module.exports = function (app, addon) {
                                 status = "Offline!";
                                 text = 'Pokémon Go Server Status: Offline! (or very unstable)'
                             }
-
-                            console.log("check non crowd server: " + text);
+                            console.log(region + ": check non crowd server: " + text);
                             if (req) {
                                 updateGlance(req, status, text);
                             } else {
-                                updateGlances(status, text);
+                                updateGlances(status, text, region);
                             }
-                            callback(status, text);
+                            callback(status, region.capitalize() + " " + text);
                         }
                     });
                 } else {
@@ -922,10 +999,18 @@ module.exports = function (app, addon) {
                 addInstalledRoom(clientInfo, clientId, res.body);
             }
             hipchat.sendMessage(clientInfo, roomId, 'The ' + addon.descriptor.name + ' add-on has been installed in this room').then(function (data) {
-                hipchat.sendMessage(clientInfo, roomId, "use /help to find out what I do");
+                hipchat.sendMessage(clientInfo, roomId, "use /help to find out what I do").then(function () {
+                    hipchat.sendMessage(clientInfo, roomId, "Changelog: You can now select which regions server to check by using '/select'. Use '/regions' to find supported regions.<br/>" +
+                        "This is probably super buggy, so if the bot is spammy or your not getting messages, send me an email at 'pokemongohipchatbot@gmail.com'");
+                });
             });
         });
-        checkServer("united states", {body: {oauth_client_id: clientId, item: {room: {id: roomId}}}}, function (status, text) {
+        checkServer("united states", {
+            body: {
+                oauth_client_id: clientId,
+                item: {room: {id: roomId}}
+            }
+        }, function (status, text) {
             lastStatus = status;
         });
     });
@@ -940,26 +1025,19 @@ module.exports = function (app, addon) {
         });
     });
 
-    getActiveRooms(function (rooms) {
+    getActiveRooms(false, function (rooms) {
         if (rooms.length > 0) {
             startInterval();
         }
     });
     getInstalledRooms(function (rooms) { // update rooms
         for (var room of rooms) {
-            // client.hset(["installed" + room.id, "server", "United States"], function (err, reply) {
-            //     if (err) {
-            //         console.log("error updating rooms to us server");
-            //         console.log(err);
-            //     }
-            // });
             changeRegion(room, "united states", function (newRegion) {
-
             });
         }
     });
-}
-;
+    sendMessageToAll("Hey, I just updated this bot to support different region servers so you should uninstall and reinstall this bot.<br/>Heres the link: <a href='https://marketplace.atlassian.com/plugins/pokemon-go-server-status-bot/server/overview'>https://marketplace.atlassian.com/plugins/pokemon-go-server-status-bot/server/overview</a>");
+};
 
 function getRoomRegion(room, callback = function (region) {}) {
     client.hget(["installed" + room.id, "region"], function (err, reply) {
@@ -973,9 +1051,8 @@ function getRoomRegion(room, callback = function (region) {}) {
     });
 }
 
-
 function getValidRegions() {
-    return ["united states", "united kingdom"];
+    return VALID_REGIONS;
 }
 
 function validRegion(region) {
@@ -1002,7 +1079,34 @@ function changeRegion(room, region, callback = function (newRegion) {}) {
             });
         }
     });
+}
 
+function getActiveRooms(region = false, callback = function (rooms) {}) {
+    var rooms = [];
+    if (!region) {
+        region = "listening";
+    }
+    client.smembers(region, function (err, reply) {
+        async.each(reply, function (roomId, cb) {
+            client.hgetall(roomId, function (err, room) {
+                room.clientInfo = JSON.parse(room.clientInfoJson);
+                rooms.push(room);
+                cb();
+            });
+        }, function (err) {
+            if (err) {
+                console.log("error in get active rooms");
+                console.log(err);
+            }
+            callback(rooms);
+        });
+    });
+}
+
+function getListeningRegions(callback = function (regions) {}) { // [regions]
+    client.smembers(["regions"], function (err, regions) {
+        callback(regions);
+    });
 }
 
 
@@ -1089,6 +1193,12 @@ function getInstalledRooms(callback = function (rooms) {}) {
 String.prototype.replaceAll = function (search, replacement) {
     var target = this;
     return target.replace(new RegExp(search, 'g'), replacement);
+};
+
+String.prototype.capitalize = function () {
+    return this.replace(/\w\S*/g, function (tStr) {
+        return tStr.charAt(0).toUpperCase() + tStr.substr(1).toLowerCase();
+    });
 };
 
 function timeConversion(millisec) {

@@ -121,7 +121,14 @@
       },
       {
         "url": "{{localBaseUrl}}/region",
-        "pattern": "^\/region",
+        "pattern": "^\/region$",
+        "event": "room_message",
+        "name": "Hello!",
+        "authentication": "jwt"
+      },
+      {
+        "url": "{{localBaseUrl}}/regions",
+        "pattern": "^\/regions",
         "event": "room_message",
         "name": "Hello!",
         "authentication": "jwt"
