@@ -224,11 +224,14 @@ module.exports = function (app, addon) {
     app.post('/server',
         addon.authenticate(),
         function (req, res) {
-            checkServer(req, function (status, text) {
-                lastStatus = status;
-                statuses.enq(status);
-                sendMessage(req, text, {}, function () {
-                    res.sendStatus(200);
+            var room = req.body.item.room;
+            getRoomRegion(room, function (region) {
+                checkServer(region, req, function (status, text) {
+                    lastStatus = status;
+                    statuses.enq(status);
+                    sendMessage(req, text, {}, function () {
+                        res.sendStatus(200);
+                    });
                 });
             });
         }
@@ -302,9 +305,12 @@ module.exports = function (app, addon) {
             startRoomListening(req, function (added) {
                 if (added) {
                     sendMessage(req, "I'll let you know if the server status changes");
-                    checkServer(req, function (status, text) {
-                        sendMessage(req, text, {}, function () {
-                            res.sendStatus(200);
+                    var room = req.body.item.room;
+                    getRoomRegion(room, function (region) {
+                        checkServer(region, req, function (status, text) {
+                            sendMessage(req, text, {}, function () {
+                                res.sendStatus(200);
+                            });
                         });
                     });
                 } else {
@@ -424,16 +430,71 @@ module.exports = function (app, addon) {
         }
     );
 
+    app.post('/select',
+        addon.authenticate(),
+        function (req, res) {
+            console.log("update region server");
+            var room = req.body.item.room;
+            var region = req.body.item.message.message.replace("/select", "").trim().toLowerCase();
+            console.log(region);
+            if (validRegion(region)) {
+                changeRegion(room, region, function (newRegion) {
+                    if (newRegion) {
+                        sendMessage(req, "your selected region is now '" + newRegion + "'", {}, function () {
+                            res.sendStatus(200);
+                        });
+                    } else {
+                        sendMessage(req, "your selected region is already '" + region + "'", {}, function () {
+                            res.sendStatus(200);
+                        });
+                    }
+                });
+            } else {
+                var validRegionsString = getValidRegions().map(function (region) {return "'" + region + "'"}).join(", ");
+                sendMessage(req, "'" + region + "' is not a valid region, valid regions are: " + validRegionsString);
+                res.sendStatus(200);
+            }
+        }
+    );
+
+    app.post('/region',
+        addon.authenticate(),
+        function (req, res) {
+            var room = req.body.item.room;
+            client.smembers(["regions"], function (err, reply) {
+                async.each(reply, function (region, cb) {
+                    client.smembers([region], function (err, reply) {
+                        console.log(region + ": " + reply.join(", "));
+                        cb();
+                    })
+                }, function (err) {
+                    if (err) {
+                        console.log("error in regions");
+                        console.log(err);
+                    }
+                });
+            });
+
+            getRoomRegion(room, function (region) {
+                sendMessage(req, "your selected region is '" + region + "'", {}, function () {
+                    res.sendStatus(200);
+                });
+            });
+        }
+    );
+
 
     function startRoomListening(req, callback = function (added) {}) {
         var room = req.body.item.room;
         var clientId = req.body.oauth_client_id;
         isRoomListening(req, function (listening) {
             if (!listening) {
-                client.sadd(["listening", room.id], function (err, reply) {
-                    client.hmset([room.id, "id", room.id, "clientInfoJson", JSON.stringify(req.clientInfo), "name", room.name], function (err, reply) {
-                        console.log("room: " + room.name + " has started listening");
-                        callback(true);
+                getRoomRegion(room, function (server) {
+                    client.sadd(["listening", room.id], function (err, reply) {
+                        client.hmset([room.id, "id", room.id, "clientInfoJson", JSON.stringify(req.clientInfo), "name", room.name, "region", server], function (err, reply) {
+                            console.log("room: " + room.name + " has started listening");
+                            callback(true);
+                        });
                     });
                 });
             } else {
@@ -507,6 +568,9 @@ module.exports = function (app, addon) {
         lastStatus = "";
         interval = setInterval(function () {
             console.log("********************************");
+            // TODO *************************************************************************************************************
+            // make this check for each region
+            // store seperate verions of recent status for each region
             checkServer(false, function (status, text) {
                 console.log("recent statuses");
                 console.log(statuses.toarray());
@@ -747,7 +811,7 @@ module.exports = function (app, addon) {
         });
     }
 
-    function checkServer(req = false, callback = function (status, text) {}) {
+    function checkServer(region, req = false, callback = function (status, text) {}) {
         if (USE_CROWD) {
             var url = 'http://cmmcd.com/PokemonGo/';
             var start = new Date().getTime();
@@ -773,6 +837,7 @@ module.exports = function (app, addon) {
                 }
             });
         } else {
+            console.log("checking " + region);
             var url = 'http://www.mmoserverstatus.com/pokemon_go';
             var start = new Date().getTime();
             request(url, function (error, response, text) {
@@ -860,7 +925,7 @@ module.exports = function (app, addon) {
                 hipchat.sendMessage(clientInfo, roomId, "use /help to find out what I do");
             });
         });
-        checkServer({body: {oauth_client_id: clientId, item: {room: {id: roomId}}}}, function (status, text) {
+        checkServer("united states", {body: {oauth_client_id: clientId, item: {room: {id: roomId}}}}, function (status, text) {
             lastStatus = status;
         });
     });
@@ -880,20 +945,106 @@ module.exports = function (app, addon) {
             startInterval();
         }
     });
-    getInstalledRooms(function(rooms) {
+    getInstalledRooms(function (rooms) { // update rooms
         for (var room of rooms) {
-            client.hset(["installed" + room.id, "server", "United States"], function(err, reply) {
-                if (err) {
-                    console.log("error updating rooms to us server");
-                    console.log(err);
-                } else {
-                    console.log(reply);
-                }
-            });
+            // client.hset(["installed" + room.id, "server", "United States"], function (err, reply) {
+            //     if (err) {
+            //         console.log("error updating rooms to us server");
+            //         console.log(err);
+            //     }
+            // });
+            changeRegion(room, "united states", function (newRegion) {
 
+            });
         }
     });
-};
+}
+;
+
+function getRoomRegion(room, callback = function (region) {}) {
+    client.hget(["installed" + room.id, "region"], function (err, reply) {
+        if (err) {
+            console.log("error with getting rooms region");
+            console.log(err);
+            callback("United States");
+        } else {
+            callback(reply);
+        }
+    });
+}
+
+
+function getValidRegions() {
+    return ["united states", "united kingdom"];
+}
+
+function validRegion(region) {
+    return getValidRegions().includes(region);
+}
+
+function changeRegion(room, region, callback = function (newRegion) {}) {
+    getRoomRegion(room, function (oldRegion) {
+        if (region == oldRegion) {
+            callback(false);
+        } else {
+            isRoomListening(room, function (listening) {
+                if (listening) {
+                    updateListeningRegion(room, oldRegion, region, function () {
+                        updateInstalledRegion(room, region, function () {
+                            callback(region);
+                        })
+                    });
+                } else {
+                    updateInstalledRegion(room, region, function () {
+                        callback(region);
+                    })
+                }
+            });
+        }
+    });
+
+}
+
+
+function updateListeningRegion(room, oldRegion, region, callback = function () {}) {
+    var done = false;
+    client.srem([oldRegion, room.id], function (err, reply) {
+        client.scard([oldRegion], function (err, reply) {
+            if (reply == 0) {
+                client.srem(["regions", oldRegion], function (err, reply) {
+                    if (done) {
+                        callback();
+                    } else {
+                        done = true;
+                    }
+                });
+            } else {
+                if (done) {
+                    callback();
+                } else {
+                    done = true;
+                }
+            }
+        });
+    });
+    client.sadd([region, room.id], function (err, reply) {
+        client.sadd(["regions", region], function (err, reply) {
+            client.hset([room.id, "region", region], function (err, reply) {
+                if (done) {
+                    callback();
+                } else {
+                    done = true;
+                }
+            });
+        });
+    });
+}
+
+function updateInstalledRegion(room, region, callback = function () {}) {
+    client.hset("installed" + room.id, "region", region, function (err, reply) {
+        callback();
+    });
+}
 
 function addInstalledRoom(clientInfo, clientId, room) {
     client.sadd(["installedRoomIds", room.id], function (err, reply) {
@@ -901,7 +1052,7 @@ function addInstalledRoom(clientInfo, clientId, room) {
             console.log("error in add installed room");
             console.log(err);
         } else {
-            client.hmset(["installed" + room.id, "id", room.id, "clientId", clientId, "name", room.name, "server", "United States"], function (err, reply) {});
+            client.hmset(["installed" + room.id, "id", room.id, "clientId", clientId, "name", room.name, "region", "united states"], function (err, reply) {});
             console.log("installed room: " + room.name + " id: " + room.id);
             isRoomListening(room, function (listening) {
                 if (listening) {

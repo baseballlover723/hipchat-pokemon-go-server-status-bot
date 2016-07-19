@@ -113,6 +113,20 @@
         "authentication": "jwt"
       },
       {
+        "url": "{{localBaseUrl}}/select",
+        "pattern": "^\/select",
+        "event": "room_message",
+        "name": "Hello!",
+        "authentication": "jwt"
+      },
+      {
+        "url": "{{localBaseUrl}}/region",
+        "pattern": "^\/region",
+        "event": "room_message",
+        "name": "Hello!",
+        "authentication": "jwt"
+      },
+      {
         "url": "{{localBaseUrl}}/webhook",
         "pattern": "^/hello",
         "event": "room_message",
