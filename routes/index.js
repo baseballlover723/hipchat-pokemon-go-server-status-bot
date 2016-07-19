@@ -1030,13 +1030,13 @@ module.exports = function (app, addon) {
             startInterval();
         }
     });
-    getInstalledRooms(function (rooms) { // update rooms
-        for (var room of rooms) {
-            changeRegion(room, "united states", function (newRegion) {
-            });
-        }
-    });
-    sendMessageToAll("Hey, I just updated this bot to support different region servers so you should uninstall and reinstall this bot.<br/>Heres the link: <a href='https://marketplace.atlassian.com/plugins/pokemon-go-server-status-bot/server/overview'>https://marketplace.atlassian.com/plugins/pokemon-go-server-status-bot/server/overview</a>");
+    // getInstalledRooms(function (rooms) { // update rooms
+    //     for (var room of rooms) {
+    //         changeRegion(room, "united states", function (newRegion) {
+    //         });
+    //     }
+    // });
+    // sendMessageToAll("Hey, I just updated this bot to support different region servers so you should uninstall and reinstall this bot.<br/>Heres the link: <a href='https://marketplace.atlassian.com/plugins/pokemon-go-server-status-bot/server/overview'>https://marketplace.atlassian.com/plugins/pokemon-go-server-status-bot/server/overview</a>");
 };
 
 function getRoomRegion(room, callback = function (region) {}) {
