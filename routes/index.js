@@ -27,7 +27,7 @@ var lastStatus;
 var statuses = {};
 var interval;
 var REFRESH_RATE = 10 * 1000; // 10 seconds
-var VERSION = "8.0.0";
+var VERSION = "8.0.1";
 var USE_CROWD = false;
 var MY_ID = process.env.MY_ID;
 var VALID_REGIONS = ["united states", "united kingdom", "germany", "italy", "new zealand", "argentina", "australia", "austria",
@@ -239,8 +239,8 @@ module.exports = function (app, addon) {
             var room = req.body.item.room;
             getRoomRegion(room, function (region) {
                 checkServer(region, req, function (status, text) {
-                    lastStatus = status;
-                    statuses.enq(status);
+                    setLastStatus(region, status);
+                    addStatus(region, status);
                     sendMessage(req, text, {}, function () {
                         res.sendStatus(200);
                     });
@@ -1030,13 +1030,32 @@ module.exports = function (app, addon) {
             startInterval();
         }
     });
-    // getInstalledRooms(function (rooms) { // update rooms
-    //     for (var room of rooms) {
-    //         changeRegion(room, "united states", function (newRegion) {
-    //         });
-    //     }
-    // });
-    // sendMessageToAll("Hey, I just updated this bot to support different region servers so you should uninstall and reinstall this bot.<br/>Heres the link: <a href='https://marketplace.atlassian.com/plugins/pokemon-go-server-status-bot/server/overview'>https://marketplace.atlassian.com/plugins/pokemon-go-server-status-bot/server/overview</a>");
+    getInstalledRooms(function (rooms) { // update rooms
+        for (var room of rooms) {
+            client.hgetall(["installed" + room.id], function(err, reply) {
+                if (!reply.region) {
+                    console.log(reply);
+                    client.hset(["installed" + room.id, "region", "united states"], function(err, reply) {
+
+                    })
+                }
+            });
+            client.hgetall([room.id], function(err, reply) {
+                if (reply) {
+                    if (!reply.region) {
+                        reply.clientInfoJson = "hidden";
+                        console.log(reply);
+                        client.hset([room.id, "region", "united states"], function (err, reply) {
+
+                        })
+                    }
+                }
+            });
+            // changeRegion(room, "united states", function (newRegion) {
+            // });
+        }
+    });
+    sendMessageToAll("Hey, I just updated this bot to support different region servers so you should uninstall and reinstall this bot.<br/>Heres the link: <a href='https://marketplace.atlassian.com/plugins/pokemon-go-server-status-bot/server/overview'>https://marketplace.atlassian.com/plugins/pokemon-go-server-status-bot/server/overview</a>");
 };
 
 function getRoomRegion(room, callback = function (region) {}) {
@@ -1044,7 +1063,7 @@ function getRoomRegion(room, callback = function (region) {}) {
         if (err) {
             console.log("error with getting rooms region");
             console.log(err);
-            callback("United States");
+            callback("united states");
         } else {
             callback(reply);
         }
