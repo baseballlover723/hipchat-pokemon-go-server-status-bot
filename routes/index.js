@@ -27,7 +27,7 @@ var lastStatus;
 var statuses = new CircularBuffer(3);
 var interval;
 var REFRESH_RATE = 10 * 1000; // 10 seconds
-var VERSION = "7.10.0";
+var VERSION = "7.11.0";
 var USE_CROWD = false;
 var MY_ID = process.env.MY_ID;
 
@@ -510,8 +510,8 @@ module.exports = function (app, addon) {
             checkServer(false, function (status, text) {
                 console.log("recent statuses");
                 console.log(statuses.toarray());
-                if (status.includes("Offline") || status.includes("Unstable")) {
-                    if (status.includes("Unstable") && !seenStatusRecently("Unstable")) {
+                if (status.includes("Offline") || status.includes("Unstable") || status.includes("Laggy")) {
+                    if ((status.includes("Unstable") && !seenStatusRecently("Unstable")) || (status.includes("Laggy") && !seenStatusRecently("Laggy"))) {
                         lastStatus = status;
                         sendMessageToAll(text, {options: {notify: true, format: "text", pings: true}});
                     } else if (status.includes("Offline")) {
@@ -519,7 +519,7 @@ module.exports = function (app, addon) {
                             lastStatus = status;
                             sendMessageToAll(text, {options: {notify: true, format: "text", pings: true}});
                         }
-                        if (!seenStatusRecently("Offline") && !lastStatus.includes("Unstable")) {
+                        if (!seenStatusRecently("Offline") && !lastStatus.includes("Unstable") && !lastStatus.includes("Laggy")) {
                             lastStatus = status;
                             sendMessageToAll(text, {options: {notify: true, format: "text", pings: true}});
                             // lastStatus = "Unstable";
