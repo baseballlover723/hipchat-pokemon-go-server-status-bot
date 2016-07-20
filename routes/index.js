@@ -27,7 +27,7 @@ var lastStatus;
 var statuses = {};
 var interval;
 var REFRESH_RATE = 10 * 1000; // 10 seconds
-var VERSION = "8.0.1";
+var VERSION = "8.1.0";
 var USE_CROWD = false;
 var MY_ID = process.env.MY_ID;
 var VALID_REGIONS = ["united states", "united kingdom", "germany", "italy", "new zealand", "argentina", "australia", "austria",
@@ -338,7 +338,8 @@ module.exports = function (app, addon) {
     app.post('/stop',
         addon.authenticate(),
         function (req, res) {
-            stopRoomListening(req, function (removed) {
+            var room = req.body.item.room;
+            stopRoomListening(room, function (removed) {
                 if (removed) {
                     sendMessage(req, "I'm not listening for server changes anymore", {}, function () {
                         res.sendStatus(200);
@@ -532,47 +533,6 @@ module.exports = function (app, addon) {
         var room = req.body.item.room;
         client.sismember(["listening", room.id], function (err, reply) {
             callback(reply == 1);
-        });
-    }
-
-    function stopRoomListening(req, callback = function (removed) {}) {
-        var room = req.body.item.room;
-        isRoomListening(req, function (listening) {
-            if (listening) {
-                var done = false;
-                client.srem(["listening", room.id], function (err, reply) {
-                    client.del(room.id);
-                    console.log("room: " + room.name + " has stopped listening");
-                    if (done) {
-                        callback(true);
-                    } else {
-                        done = true;
-                    }
-                });
-                getRoomRegion(room, function (region) {
-                    client.srem([region, room.id], function (err, reply) {
-                        client.scard([region], function (err, reply) {
-                            if (reply == 0) {
-                                client.srem(["regions", region], function (err, reply) {
-                                    if (done) {
-                                        callback(true);
-                                    } else {
-                                        done = true;
-                                    }
-                                });
-                            } else {
-                                if (done) {
-                                    callback(true);
-                                } else {
-                                    done = true;
-                                }
-                            }
-                        });
-                    });
-                });
-            } else {
-                callback(false);
-            }
         });
     }
 
@@ -1017,11 +977,10 @@ module.exports = function (app, addon) {
 
 // Clean up clients when uninstalled
     addon.on('uninstalled', function (id) {
-        getInstalledRooms(function(rooms) {
-            rooms.forEach(function(room) {
+        getInstalledRooms(function (rooms) {
+            rooms.forEach(function (room) {
                 if (room.clientId == id) {
-                    client.del([])
-                    // TODO
+                    removeInstalledRoom(room);
                 }
             });
         });
@@ -1041,15 +1000,15 @@ module.exports = function (app, addon) {
 
     getInstalledRooms(function (rooms) { // update rooms
         for (var room of rooms) {
-            client.hgetall(["installed" + room.id], function(err, reply) {
+            client.hgetall(["installed" + room.id], function (err, reply) {
                 if (!reply.region) {
                     console.log(reply);
-                    client.hset(["installed" + room.id, "region", "united states"], function(err, reply) {
+                    client.hset(["installed" + room.id, "region", "united states"], function (err, reply) {
 
                     })
                 }
             });
-            client.hgetall([room.id], function(err, reply) {
+            client.hgetall([room.id], function (err, reply) {
                 if (reply) {
                     if (!reply.region) {
                         reply.clientInfoJson = "hidden";
@@ -1064,7 +1023,7 @@ module.exports = function (app, addon) {
             // });
         }
     });
-    sendMessageToAll("Hey, I just updated this bot to support different region servers so you should uninstall and reinstall this bot.<br/>Heres the link: <a href='https://marketplace.atlassian.com/plugins/pokemon-go-server-status-bot/server/overview'>https://marketplace.atlassian.com/plugins/pokemon-go-server-status-bot/server/overview</a>");
+    // sendMessageToAll("Hey, I just updated this bot to support different region servers so you should uninstall and reinstall this bot.<br/>Heres the link: <a href='https://marketplace.atlassian.com/plugins/pokemon-go-server-status-bot/server/overview'>https://marketplace.atlassian.com/plugins/pokemon-go-server-status-bot/server/overview</a>");
 };
 
 function getRoomRegion(room, callback = function (region) {}) {
@@ -1131,6 +1090,46 @@ function getActiveRooms(region = false, callback = function (rooms) {}) {
     });
 }
 
+function stopRoomListening(room, callback = function (removed) {}) {
+    isRoomListening(room, function (listening) {
+        if (listening) {
+            var done = false;
+            client.srem(["listening", room.id], function (err, reply) {
+                client.del(room.id);
+                console.log("room: " + room.name + " has stopped listening");
+                if (done) {
+                    callback(true);
+                } else {
+                    done = true;
+                }
+            });
+            getRoomRegion(room, function (region) {
+                client.srem([region, room.id], function (err, reply) {
+                    client.scard([region], function (err, reply) {
+                        if (reply == 0) {
+                            client.srem(["regions", region], function (err, reply) {
+                                if (done) {
+                                    callback(true);
+                                } else {
+                                    done = true;
+                                }
+                            });
+                        } else {
+                            if (done) {
+                                callback(true);
+                            } else {
+                                done = true;
+                            }
+                        }
+                    });
+                });
+            });
+        } else {
+            callback(false);
+        }
+    });
+}
+
 function getListeningRegions(callback = function (regions) {}) { // [regions]
     client.smembers(["regions"], function (err, regions) {
         callback(regions);
@@ -1175,6 +1174,16 @@ function updateListeningRegion(room, oldRegion, region, callback = function () {
 function updateInstalledRegion(room, region, callback = function () {}) {
     client.hset("installed" + room.id, "region", region, function (err, reply) {
         callback();
+    });
+}
+
+function removeInstalledRoom(room, callback = function () {}) {
+    stopRoomListening(room, function (removed) {
+        client.del(["installed" + room.id], function (err, reply) {
+            client.srem("installedRoomIds", room.id, function (err, reply) {
+                callback();
+            });
+        });
     });
 }
 
