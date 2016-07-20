@@ -567,10 +567,12 @@ module.exports = function (app, addon) {
                         console.log(region + ": recent statuses: [" + getStatuses(region).toarray().map(function (r) {return "'" + r + "'"}).join(", ") + "]");
                         if (status.includes("Offline") || status.includes("Unstable") || status.includes("Laggy")) {
                             if ((status.includes("Unstable") && !seenStatusRecently(region, "Unstable")) || (status.includes("Laggy") && !seenStatusRecently(region, "Laggy"))) {
+                                console.log(region + ": sent message case 1 " + JSON.stringify(lastStatus));
                                 setLastStatus(region, status);
                                 sendMessageToAll(text, region, {options: {notify: true, format: "text", pings: true}});
                             } else if (status.includes("Offline")) {
                                 if (allStatusRecently(region, "Offline") && !getLastStatus(region).includes("Offline")) {
+                                    console.log(region + ": sent message case 2 " + JSON.stringify(lastStatus));
                                     setLastStatus(region, status);
                                     sendMessageToAll(text, region, {
                                         options: {
@@ -581,6 +583,7 @@ module.exports = function (app, addon) {
                                     });
                                 }
                                 if (!seenStatusRecently(region, "Offline") && !getLastStatus(region).includes("Unstable") && !getLastStatus(region).includes("Laggy")) {
+                                    console.log(region + ": sent message case 3 " + JSON.stringify(lastStatus));
                                     setLastStatus(region, status);
                                     sendMessageToAll(text, region, {
                                         options: {
@@ -601,6 +604,7 @@ module.exports = function (app, addon) {
                             }
                         } else if (status.includes("Online")) {
                             if (!allStatusRecently(region, "Online") && getStatuses(region).size() > 0) {
+                                console.log(region + ": sent message case 4 (Online) " + JSON.stringify(lastStatus));
                                 clearStatuses(region);
                                 setLastStatus(region, status);
                                 sendMessageToAll(text, region, {options: {notify: true, format: "text", pings: true}});
