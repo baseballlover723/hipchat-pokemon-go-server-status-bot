@@ -27,7 +27,7 @@ var lastStatus;
 var statuses = {};
 var interval;
 var REFRESH_RATE = 10 * 1000; // 10 seconds
-var VERSION = "8.1.0";
+var VERSION = "8.1.1";
 var USE_CROWD = false;
 var MY_ID = process.env.MY_ID;
 var VALID_REGIONS = ["united states", "united kingdom", "germany", "italy", "new zealand", "argentina", "australia", "austria",
@@ -824,23 +824,23 @@ module.exports = function (app, addon) {
                                 item: {room: room}
                             }
                         }, function (pings) {
-                            hipchat.sendMessage(room.clientInfo, room.id, message + pings, ops);
+                            // hipchat.sendMessage(room.clientInfo, room.id, message + pings, ops);
                             checkVersion({
                                 body: {oauth_client_id: room.clientInfo.clientKey, item: {room: room}},
                                 function(installedVersion, needUpgrade) {
                                     if (needUpgrade) {
-                                        hipchat.sendMessage(room.clientInfo, room.id, "You need to upgrade this plugin by uninstalling and reinstalling the plugin here: https://marketplace.atlassian.com/plugins/pokemon-go-server-status-bot/cloud/overview", {options: {format: "text"}});
+                                        // hipchat.sendMessage(room.clientInfo, room.id, "You need to upgrade this plugin by uninstalling and reinstalling the plugin here: https://marketplace.atlassian.com/plugins/pokemon-go-server-status-bot/cloud/overview", {options: {format: "text"}});
                                     }
                                 }
                             });
                         });
                     } else {
-                        hipchat.sendMessage(room.clientInfo, room.id, message, ops);
+                        // hipchat.sendMessage(room.clientInfo, room.id, message, ops);
                         checkVersion({
                             body: {oauth_client_id: room.clientInfo.clientKey, item: {room: room}},
                             function(installedVersion, needUpgrade) {
                                 if (needUpgrade) {
-                                    hipchat.sendMessage(room.clientInfo, room.id, "You need to upgrade this plugin by uninstalling and reinstalling the plugin here: https://marketplace.atlassian.com/plugins/pokemon-go-server-status-bot/cloud/overview", {options: {format: "text"}});
+                                    // hipchat.sendMessage(room.clientInfo, room.id, "You need to upgrade this plugin by uninstalling and reinstalling the plugin here: https://marketplace.atlassian.com/plugins/pokemon-go-server-status-bot/cloud/overview", {options: {format: "text"}});
                                 }
                             }
                         });
