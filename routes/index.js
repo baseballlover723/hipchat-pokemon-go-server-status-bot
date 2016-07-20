@@ -1017,6 +1017,14 @@ module.exports = function (app, addon) {
 
 // Clean up clients when uninstalled
     addon.on('uninstalled', function (id) {
+        getInstalledRooms(function(rooms) {
+            rooms.forEach(function(room) {
+                if (room.clientId == id) {
+                    client.del([])
+                    // TODO
+                }
+            });
+        });
         addon.settings.client.keys(id + ':*', function (err, rep) {
             rep.forEach(function (k) {
                 addon.logger.info('Removing key:', k);
@@ -1030,6 +1038,7 @@ module.exports = function (app, addon) {
             startInterval();
         }
     });
+
     getInstalledRooms(function (rooms) { // update rooms
         for (var room of rooms) {
             client.hgetall(["installed" + room.id], function(err, reply) {
