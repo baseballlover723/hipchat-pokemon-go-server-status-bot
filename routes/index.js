@@ -27,7 +27,7 @@ var lastStatus;
 var statuses = {};
 var interval;
 var REFRESH_RATE = 10 * 1000; // 10 seconds
-var VERSION = "8.1.2";
+var VERSION = "8.1.3";
 var USE_CROWD = false;
 var MY_ID = process.env.MY_ID;
 var VALID_REGIONS = ["united states", "united kingdom", "germany", "italy", "new zealand", "argentina", "australia", "austria",
@@ -565,14 +565,32 @@ module.exports = function (app, addon) {
                 regions.forEach(function (region) {
                     checkServer(region, false, function (status, text) {
                         console.log(region + ": recent statuses: [" + getStatuses(region).toarray().map(function (r) {return "'" + r + "'"}).join(", ") + "]");
-                        if (status.includes("Offline") || status.includes("Unstable") || status.includes("Laggy")) {
-                            if ((status.includes("Unstable") && !seenStatusRecently(region, "Unstable")) || (status.includes("Laggy") && !seenStatusRecently(region, "Laggy"))) {
-                                console.log(region + ": sent message case 1 " + JSON.stringify(lastStatus));
-                                setLastStatus(region, status);
-                                sendMessageToAll(text, region, {options: {notify: true, format: "text", pings: true}});
-                            } else if (status.includes("Offline")) {
-                                if (!seenStatusRecently(region, "Offline")) {
-                                        console.log(region + ": sent message case 4 " + JSON.stringify(lastStatus));
+                        if (getLastStatus(region) != "") {
+                            if (status.includes("Offline") || status.includes("Unstable") || status.includes("Laggy")) {
+                                if ((status.includes("Unstable") && !seenStatusRecently(region, "Unstable")) || (status.includes("Laggy") && !seenStatusRecently(region, "Laggy"))) {
+                                    console.log(region + ": sent message case 1 " + JSON.stringify(lastStatus));
+                                    setLastStatus(region, status);
+                                    sendMessageToAll(text, region, {
+                                        options: {
+                                            notify: true,
+                                            format: "text",
+                                            pings: true
+                                        }
+                                    });
+                                } else if (status.includes("Offline")) {
+                                    // if (!seenStatusRecently(region, "Offline")) {
+                                    //         console.log(region + ": sent message case 4 " + JSON.stringify(lastStatus));
+                                    //         setLastStatus(region, status);
+                                    //         sendMessageToAll(text, region, {
+                                    //             options: {
+                                    //                 notify: true,
+                                    //                 format: "text",
+                                    //                 pings: true
+                                    //             }
+                                    //         });
+                                    // }
+                                    if (allStatusRecently(region, "Offline") && !getLastStatus(region).includes("Offline")) {
+                                        console.log(region + ": sent message case 2 " + JSON.stringify(lastStatus));
                                         setLastStatus(region, status);
                                         sendMessageToAll(text, region, {
                                             options: {
@@ -581,44 +599,40 @@ module.exports = function (app, addon) {
                                                 pings: true
                                             }
                                         });
+                                    }
+                                    if (!seenStatusRecently(region, "Offline") && !getLastStatus(region).includes("Unstable") && !getLastStatus(region).includes("Laggy")) {
+                                        console.log(region + ": sent message case 3 " + JSON.stringify(lastStatus));
+                                        setLastStatus(region, status);
+                                        sendMessageToAll(text, region, {
+                                            options: {
+                                                notify: true,
+                                                format: "text",
+                                                pings: true
+                                            }
+                                        });
+                                        // lastStatus = "Unstable";
+                                        // sendMessageToAll(text.replace("Offline", "Unstable"), region, {
+                                        //     options: {
+                                        //         notify: true,
+                                        //         format: "text",
+                                        //         pings: true
+                                        //     }
+                                        // });
+                                    }
                                 }
-                                // if (allStatusRecently(region, "Offline") && !getLastStatus(region).includes("Offline")) {
-                                //     console.log(region + ": sent message case 2 " + JSON.stringify(lastStatus));
-                                //     setLastStatus(region, status);
-                                //     sendMessageToAll(text, region, {
-                                //         options: {
-                                //             notify: true,
-                                //             format: "text",
-                                //             pings: true
-                                //         }
-                                //     });
-                                // }
-                                // if (!seenStatusRecently(region, "Offline") && !getLastStatus(region).includes("Unstable") && !getLastStatus(region).includes("Laggy")) {
-                                //     console.log(region + ": sent message case 3 " + JSON.stringify(lastStatus));
-                                //     setLastStatus(region, status);
-                                //     sendMessageToAll(text, region, {
-                                //         options: {
-                                //             notify: true,
-                                //             format: "text",
-                                //             pings: true
-                                //         }
-                                //     });
-                                //     // lastStatus = "Unstable";
-                                //     // sendMessageToAll(text.replace("Offline", "Unstable"), region, {
-                                //     //     options: {
-                                //     //         notify: true,
-                                //     //         format: "text",
-                                //     //         pings: true
-                                //     //     }
-                                //     // });
-                                // }
-                            }
-                        } else if (status.includes("Online")) {
-                            if (!allStatusRecently(region, "Online") && getStatuses(region).size() > 0) {
-                                console.log(region + ": sent message case 4 (Online) " + JSON.stringify(lastStatus));
-                                clearStatuses(region);
-                                setLastStatus(region, status);
-                                sendMessageToAll(text, region, {options: {notify: true, format: "text", pings: true}});
+                            } else if (status.includes("Online")) {
+                                if (!allStatusRecently(region, "Online") && getStatuses(region).size() > 0) {
+                                    console.log(region + ": sent message case 4 (Online) " + JSON.stringify(lastStatus));
+                                    clearStatuses(region);
+                                    setLastStatus(region, status);
+                                    sendMessageToAll(text, region, {
+                                        options: {
+                                            notify: true,
+                                            format: "text",
+                                            pings: true
+                                        }
+                                    });
+                                }
                             }
                         }
                         addStatus(region, status);
