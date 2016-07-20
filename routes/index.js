@@ -1038,7 +1038,7 @@ module.exports = function (app, addon) {
             // });
         }
     });
-    sendMessageToAll("Hopefully I fixed the bug, sorry about all the spam");
+    // sendMessageToAll("Hopefully I fixed the bug, sorry about all the spam");
     // sendMessageToAll("Hey, I just updated this bot to support different region servers so you should uninstall and reinstall this bot.<br/>Heres the link: <a href='https://marketplace.atlassian.com/plugins/pokemon-go-server-status-bot/server/overview'>https://marketplace.atlassian.com/plugins/pokemon-go-server-status-bot/server/overview</a>");
 };
 
