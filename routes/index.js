@@ -27,7 +27,7 @@ var lastStatus;
 var statuses = {};
 var interval;
 var REFRESH_RATE = 10 * 1000; // 10 seconds
-var VERSION = "8.1.3";
+var VERSION = "8.1.4";
 var USE_CROWD = false;
 var MY_ID = process.env.MY_ID;
 var VALID_REGIONS = ["united states", "united kingdom", "germany", "italy", "new zealand", "argentina", "australia", "austria",
@@ -1208,6 +1208,7 @@ function updateInstalledRegion(room, region, callback = function () {}) {
 }
 
 function removeInstalledRoom(room, callback = function () {}) {
+    console.log(room.name + ": " + room.id + " has uninstalled");
     stopRoomListening(room, function (removed) {
         client.del(["installed" + room.id], function (err, reply) {
             client.srem("installedRoomIds", room.id, function (err, reply) {
