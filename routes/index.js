@@ -27,7 +27,7 @@ var lastStatus;
 var statuses = {};
 var interval;
 var REFRESH_RATE = 10 * 1000; // 10 seconds
-var VERSION = "8.1.5";
+var VERSION = "8.1.6";
 var USE_CROWD = false;
 var MY_ID = process.env.MY_ID;
 var VALID_REGIONS = ["united states", "united kingdom", "germany", "italy", "new zealand", "argentina", "australia", "austria",
@@ -565,7 +565,8 @@ module.exports = function (app, addon) {
                 regions.forEach(function (region) {
                     checkServer(region, false, function (status, text) {
                         console.log(region + ": recent statuses: [" + getStatuses(region).toarray().map(function (r) {return "'" + r + "'"}).join(", ") + "]");
-                        if (getLastStatus(region) != "") {
+                        console.log(region + ": last status sent: " + getLastStatus(region));
+                        //if (getLastStatus(region) != "") {
                             if (status.includes("Offline") || status.includes("Unstable") || status.includes("Laggy")) {
                                 if ((status.includes("Unstable") && !seenStatusRecently(region, "Unstable")) || (status.includes("Laggy") && !seenStatusRecently(region, "Laggy"))) {
                                     console.log(region + ": sent message case 1 " + JSON.stringify(lastStatus));
@@ -589,7 +590,7 @@ module.exports = function (app, addon) {
                                     //             }
                                     //         });
                                     // }
-                                    if (allStatusRecently(region, "Offline") && !getLastStatus(region).includes("Offline")) {
+                                    if (allStatusRecently(region, "Offline") && getLastStatus(region) && !getLastStatus(region).includes("Offline")) {
                                         console.log(region + ": sent message case 2 " + JSON.stringify(lastStatus));
                                         setLastStatus(region, status);
                                         sendMessageToAll(text, region, {
@@ -634,7 +635,7 @@ module.exports = function (app, addon) {
                                     });
                                 }
                             }
-                        }
+                        //}
                         addStatus(region, status);
                     });
                 });
