@@ -27,7 +27,7 @@ var lastStatus;
 var statuses = {};
 var interval;
 var REFRESH_RATE = 10 * 1000; // 10 seconds
-var VERSION = "8.1.6";
+var VERSION = "8.1.7";
 var USE_CROWD = false;
 var MY_ID = process.env.MY_ID;
 var VALID_REGIONS = ["united states", "united kingdom", "germany", "italy", "new zealand", "argentina", "australia", "austria",
@@ -447,10 +447,8 @@ module.exports = function (app, addon) {
     app.post('/select',
         addon.authenticate(),
         function (req, res) {
-            console.log("update region server");
             var room = req.body.item.room;
             var region = req.body.item.message.message.replace("/select", "").trim().toLowerCase();
-            console.log(region);
             if (validRegion(region)) {
                 changeRegion(room, region, function (newRegion) {
                     if (newRegion) {
@@ -1086,11 +1084,13 @@ function changeRegion(room, region, callback = function (newRegion) {}) {
                 if (listening) {
                     updateListeningRegion(room, oldRegion, region, function () {
                         updateInstalledRegion(room, region, function () {
+                            console.log("updated room " + room.name + ": " + room.id + " from region '" + oldRegion + "' to '" + region + "'");
                             callback(region);
                         })
                     });
                 } else {
                     updateInstalledRegion(room, region, function () {
+                        console.log("updated room " + room.name + ": " + room.id + " from region '" + oldRegion + "' to '" + region + "'");
                         callback(region);
                     })
                 }
