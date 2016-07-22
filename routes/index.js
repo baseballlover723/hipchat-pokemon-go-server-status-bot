@@ -27,7 +27,7 @@ var lastStatus;
 var statuses = {};
 var interval;
 var REFRESH_RATE = 10 * 1000; // 10 seconds
-var VERSION = "8.1.7";
+var VERSION = "8.1.8";
 var USE_CROWD = false;
 var MY_ID = process.env.MY_ID;
 var VALID_REGIONS = ["united states", "united kingdom", "germany", "italy", "new zealand", "argentina", "australia", "austria",
@@ -563,7 +563,7 @@ module.exports = function (app, addon) {
                 regions.forEach(function (region) {
                     checkServer(region, false, function (status, text) {
                         console.log(region + ": recent statuses: [" + getStatuses(region).toarray().map(function (r) {return "'" + r + "'"}).join(", ") + "]");
-                        console.log(region + ": last status sent: " + getLastStatus(region));
+                        console.log(region + ": last status sent: '" + getLastStatus(region) + "'");
                         //if (getLastStatus(region) != "") {
                             if (status.includes("Offline") || status.includes("Unstable") || status.includes("Laggy")) {
                                 if ((status.includes("Unstable") && !seenStatusRecently(region, "Unstable")) || (status.includes("Laggy") && !seenStatusRecently(region, "Laggy"))) {
@@ -643,11 +643,13 @@ module.exports = function (app, addon) {
     }
 
     function getLastStatus(region) {
+        console.log("get lastStatus: " + JSON.stringify(lastStatus));
         return lastStatus[region] || "";
     }
 
     function setLastStatus(region, status) {
         lastStatus[region] = status;
+        console.log("set lastStatus: " + JSON.stringify(lastStatus));
     }
 
     function addStatus(region, status) {
