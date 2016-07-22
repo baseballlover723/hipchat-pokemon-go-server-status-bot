@@ -27,7 +27,7 @@ var lastStatus;
 var statuses = {};
 var interval;
 var REFRESH_RATE = 10 * 1000; // 10 seconds
-var VERSION = "8.1.8";
+var VERSION = "8.1.9";
 var USE_CROWD = false;
 var MY_ID = process.env.MY_ID;
 var VALID_REGIONS = ["united states", "united kingdom", "germany", "italy", "new zealand", "argentina", "australia", "austria",
@@ -610,7 +610,7 @@ module.exports = function (app, addon) {
                                                 pings: true
                                             }
                                         });
-                                        // lastStatus = "Unstable";
+                                        // setLastStatus(region , "Unstable");
                                         // sendMessageToAll(text.replace("Offline", "Unstable"), region, {
                                         //     options: {
                                         //         notify: true,
@@ -1000,7 +1000,7 @@ module.exports = function (app, addon) {
                 item: {room: {id: roomId}}
             }
         }, function (status, text) {
-            lastStatus = status;
+            setLastStatus("united states", status);
         });
     });
 
