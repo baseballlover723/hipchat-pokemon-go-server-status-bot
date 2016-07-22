@@ -560,6 +560,7 @@ module.exports = function (app, addon) {
             console.log("********************************");
             getListeningRegions(function (regions) {
                 console.log("listening regions: [" + regions.map(function (r) {return "'" + r + "'"}).join(", ") + "]");
+                console.log("lastStatus: " + JSON.stringify(lastStatus));
                 regions.forEach(function (region) {
                     checkServer(region, false, function (status, text) {
                         console.log(region + ": recent statuses: [" + getStatuses(region).toarray().map(function (r) {return "'" + r + "'"}).join(", ") + "]");
@@ -643,13 +644,11 @@ module.exports = function (app, addon) {
     }
 
     function getLastStatus(region) {
-        console.log("get lastStatus: " + JSON.stringify(lastStatus));
         return lastStatus[region] || "";
     }
 
     function setLastStatus(region, status) {
         lastStatus[region] = status;
-        console.log("set lastStatus: " + JSON.stringify(lastStatus));
     }
 
     function addStatus(region, status) {
