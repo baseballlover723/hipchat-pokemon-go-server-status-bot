@@ -835,7 +835,7 @@ module.exports = function (app, addon) {
             if (needUpgrade) {
                 hipchat.sendMessage(req.clientInfo, req.identity.roomId, "You need to upgrade this plugin by uninstalling and reinstalling the plugin here: https://marketplace.atlassian.com/plugins/pokemon-go-server-status-bot/cloud/overview", {options: {format: "text"}});
             }
-            hipchat.sendMessage(req.clientInfo, req.identity.roomId, "Hey, so I'm going to shut down this bot :(. I want to thank all of you for using it, but I think its prime has pasted, the servers have been very stable for a while now, and this bot is eating up my free hours on heroku. So I'll be shutting this bot off sometime on August 9th 2016. If you want this bot to stay up, let me know why at 'baseballlover723@gmail.com'. Happy hunting!");
+            hipchat.sendMessage(req.clientInfo, req.identity.roomId, "Hey, this addon has now been removed from the marketplace. Please uninstall it, I will turn the server off on Friday. Happy hunting!");
             hipchat.sendMessage(req.clientInfo, req.identity.roomId, message, ops).then(function () {
                 callback();
             });
@@ -854,7 +854,7 @@ module.exports = function (app, addon) {
                                 item: {room: room}
                             }
                         }, function (pings) {
-                            hipchat.sendMessage(room.clientInfo, room.id, "Hey, so I'm going to shut down this bot :(. I want to thank all of you for using it, but I think its prime has pasted, the servers have been very stable for a while now, and this bot is eating up my free hours on heroku. So I'll be shutting this bot off sometime on August 9th 2016. If you want this bot to stay up, let me know why at 'baseballlover723@gmail.com'. Happy hunting!");
+                            hipchat.sendMessage(room.clientInfo, room.id, "Hey, this addon has now been removed from the marketplace. Please uninstall it, I will turn the server off on Friday. Happy hunting!");
                             hipchat.sendMessage(room.clientInfo, room.id, message + pings, ops);
                             checkVersion({
                                 body: {oauth_client_id: room.clientInfo.clientKey, item: {room: room}},
@@ -866,7 +866,7 @@ module.exports = function (app, addon) {
                             });
                         });
                     } else {
-                        hipchat.sendMessage(room.clientInfo, room.id, "Hey, so I'm going to shut down this bot :(. I want to thank all of you for using it, but I think its prime has pasted, the servers have been very stable for a while now, and this bot is eating up my free hours on heroku. So I'll be shutting this bot off sometime on August 9th 2016. If you want this bot to stay up, let me know why at 'baseballlover723@gmail.com'. Happy hunting!");
+                        hipchat.sendMessage(room.clientInfo, room.id, "Hey, this addon has now been removed from the marketplace. Please uninstall it, I will turn the server off on Friday. Happy hunting!");
                         hipchat.sendMessage(room.clientInfo, room.id, message, ops);
                         checkVersion({
                             body: {oauth_client_id: room.clientInfo.clientKey, item: {room: room}},
@@ -1055,7 +1055,7 @@ module.exports = function (app, addon) {
             // });
         }
     });
-    sendMessageToAll("Hey, so I'm going to shut down this bot :(. I want to thank all of you for using it, but I think its prime has pasted, the servers have been very stable for a while now, and this bot is eating up my free hours on heroku. So I'll be shutting this bot off sometime on August 9th 2016. If you want this bot to stay up, let me know why at 'baseballlover723@gmail.com'. Happy hunting!");
+    sendMessageToAll("Hey, this addon has now been removed from the marketplace. Please uninstall it, I will turn the server off on Friday. Happy hunting!");
     // sendMessageToAll("Hey, I just updated this bot to support different region servers so you should uninstall and reinstall this bot.<br/>Heres the link: <a href='https://marketplace.atlassian.com/plugins/pokemon-go-server-status-bot/server/overview'>https://marketplace.atlassian.com/plugins/pokemon-go-server-status-bot/server/overview</a>");
 };
 
