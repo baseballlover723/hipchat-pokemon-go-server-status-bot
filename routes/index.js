@@ -1026,7 +1026,7 @@ module.exports = function (app, addon) {
 
     getActiveRooms(false, function (rooms) {
         if (rooms.length > 0) {
-            startInterval();
+            // startInterval();
         }
     });
 
